@@ -45,7 +45,9 @@
           "icon": "./assets/notification-icon.png",
           "color": "#7F5AF0"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": false

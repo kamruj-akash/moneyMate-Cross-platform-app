@@ -72,7 +72,7 @@ export const DataProvider = ({ children }) => {
       setTransactions(tx || []);
 
       let cats = cat || [];
-      if ((!cats || cats.length === 0) && (isOfflineMode || !isAuthenticated)) {
+      if (!cats || cats.length === 0) {
         cats = DEFAULT_CATEGORIES.map((c) => ({
           ...c,
           id: uuid(),
@@ -80,6 +80,10 @@ export const DataProvider = ({ children }) => {
           updated_at: nowISO(),
         }));
         await setJSON(KEYS.CATEGORIES, cats);
+        // For authed users with empty cloud → push defaults to cloud too
+        if (isAuthenticated && !isOfflineMode) {
+          for (const c of cats) queueAction('insert', 'categories', c);
+        }
       }
       setCategories(cats);
       setRecurring(rec || []);

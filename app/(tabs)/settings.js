@@ -11,6 +11,7 @@ import GradientBackground from '../../components/GradientBackground';
 import SyncIndicator from '../../components/SyncIndicator';
 import Sheet from '../../components/ui/Sheet';
 import SheetHeader from '../../components/ui/SheetHeader';
+import ProfileEditor from '../../components/profiles/ProfileEditor';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import Toggle from '../../components/ui/Toggle';
@@ -32,6 +33,8 @@ export default function Settings() {
   const {
     transactions, categories, recurring, settings, syncStatus,
     updateBudget, updateSettings, deleteRecurring, updateRecurring, replaceAllData,
+    profiles, activeProfile, activeProfileId,
+    addProfile, updateProfile, deleteProfile, switchProfile,
   } = useData();
   const { show } = useToast();
 
@@ -77,6 +80,22 @@ export default function Settings() {
       setPwdSaving(false);
     }
   };
+
+  const [profilesSheet, setProfilesSheet] = useState(false);
+  const [profileEditor, setProfileEditor] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(null);
+
+  const onSaveProfile = async (data) => {
+    if (editingProfile) {
+      await updateProfile(editingProfile.id, data);
+    } else {
+      const created = await addProfile(data);
+      // Auto-switch to newly-created profile
+      if (created?.id) await switchProfile(created.id);
+    }
+  };
+
+  const onDeleteProfile = async (id) => deleteProfile(id);
 
   const [profileSheet, setProfileSheet] = useState(false);
   const [profileName, setProfileName] = useState('');
@@ -326,8 +345,24 @@ export default function Settings() {
             </View>
           </Section>
 
-          {/* Profile */}
-          <Section title="Profile">
+          {/* Profiles (multi-profile switcher) */}
+          <Section title="Profiles">
+            <Row
+              icon={activeProfile?.icon || 'person-circle-outline'}
+              label="Active profile"
+              value={activeProfile?.name || '—'}
+              onPress={() => setProfilesSheet(true)}
+            />
+            <Row
+              icon="add-circle-outline"
+              label="Manage profiles"
+              value={`${profiles.length} ${profiles.length === 1 ? 'profile' : 'profiles'}`}
+              onPress={() => setProfilesSheet(true)}
+            />
+          </Section>
+
+          {/* Personal info */}
+          <Section title="Personal info">
             <Row
               icon="person-outline"
               label="Name"
@@ -502,7 +537,121 @@ export default function Settings() {
           </ScrollView>
         </Sheet>
 
-        {/* Profile Sheet */}
+        {/* Profiles Sheet (switcher + management) */}
+        <Sheet visible={profilesSheet} onClose={() => setProfilesSheet(false)}>
+          <SheetHeader
+            title="Profiles"
+            subtitle="Switch between separate ledgers (e.g. Personal, Office, Family)"
+            onClose={() => setProfilesSheet(false)}
+          />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: SPACING.huge }}>
+            {profiles.map((p) => {
+              const isActive = p.id === activeProfileId;
+              return (
+                <Pressable
+                  key={p.id}
+                  onPress={async () => {
+                    if (!isActive) {
+                      await switchProfile(p.id);
+                      hSuccess();
+                      show(`Switched to "${p.name}"`, { variant: 'success' });
+                      setProfilesSheet(false);
+                    }
+                  }}
+                  onLongPress={() => {
+                    setEditingProfile(p);
+                    setProfileEditor(true);
+                  }}
+                  style={[
+                    styles.profileItem,
+                    isActive && {
+                      borderColor: p.color,
+                      backgroundColor: `${p.color}18`,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.profileIcon,
+                      { backgroundColor: `${p.color}33`, borderColor: `${p.color}55` },
+                    ]}
+                  >
+                    <Ionicons name={p.icon} size={20} color={p.color} />
+                  </View>
+                  <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ color: COLORS.textPrimary, fontFamily: FONT.semibold, fontSize: 15 }} numberOfLines={1}>
+                        {p.name}
+                      </Text>
+                      {p.is_default ? (
+                        <Text style={{ color: COLORS.textMuted, fontFamily: FONT.medium, fontSize: 11, letterSpacing: 1, marginLeft: SPACING.sm, textTransform: 'uppercase' }}>
+                          Default
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 12, marginTop: 2 }}>
+                      {p.monthly_budget > 0
+                        ? `Budget: ${formatAmount(p.monthly_budget, settings.currency)}`
+                        : 'No budget set'}
+                    </Text>
+                  </View>
+                  {isActive ? (
+                    <Ionicons name="checkmark-circle" size={20} color={p.color} />
+                  ) : (
+                    <Pressable
+                      onPress={() => {
+                        setEditingProfile(p);
+                        setProfileEditor(true);
+                      }}
+                      hitSlop={10}
+                      style={{ padding: 4 }}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.textMuted} />
+                    </Pressable>
+                  )}
+                </Pressable>
+              );
+            })}
+
+            <Pressable
+              onPress={() => {
+                setEditingProfile(null);
+                setProfileEditor(true);
+              }}
+              style={[styles.profileItem, { borderStyle: 'dashed', borderColor: COLORS.borderStrong, backgroundColor: 'transparent' }]}
+            >
+              <View
+                style={[
+                  styles.profileIcon,
+                  { backgroundColor: COLORS.surface, borderColor: COLORS.borderStrong, borderStyle: 'dashed' },
+                ]}
+              >
+                <Ionicons name="add" size={22} color={COLORS.textSecondary} />
+              </View>
+              <View style={{ flex: 1, marginLeft: SPACING.md }}>
+                <Text style={{ color: COLORS.textPrimary, fontFamily: FONT.semibold, fontSize: 15 }}>Add new profile</Text>
+                <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 12, marginTop: 2 }}>
+                  Personal, Office, Family — separate ledgers
+                </Text>
+              </View>
+            </Pressable>
+
+            <Text style={{ color: COLORS.textMuted, fontFamily: FONT.regular, fontSize: 12, marginTop: SPACING.lg, textAlign: 'center' }}>
+              Tap to switch · Tap ⋯ or long-press to edit
+            </Text>
+          </ScrollView>
+        </Sheet>
+
+        {/* Profile editor (add/edit) */}
+        <ProfileEditor
+          visible={profileEditor}
+          onClose={() => setProfileEditor(false)}
+          initial={editingProfile}
+          onSave={onSaveProfile}
+          onDelete={onDeleteProfile}
+        />
+
+        {/* Personal info Sheet */}
         <Sheet visible={profileSheet} onClose={() => setProfileSheet(false)}>
           <SheetHeader
             title="Edit profile"
@@ -788,5 +937,20 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: RADIUS.xxl,
     borderTopRightRadius: RADIUS.xxl,
     paddingTop: SPACING.lg,
+  },
+  profileItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  profileIcon: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
   },
 });

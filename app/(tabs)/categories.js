@@ -8,10 +8,12 @@ import GradientBackground from '../../components/GradientBackground';
 import SegmentedControl from '../../components/ui/SegmentedControl';
 import CategoryEditor from '../../components/categories/CategoryEditor';
 import { useData } from '../../context/DataContext';
+import { useToast } from '../../components/ui/Toast';
 
 export default function Categories() {
   const router = useRouter();
   const { categories, transactions, addCategory, updateCategory, deleteCategory } = useData();
+  const { show } = useToast();
   const [type, setType] = useState('expense');
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -63,7 +65,17 @@ export default function Categories() {
             {list.map((c) => (
               <Pressable
                 key={c.id}
-                onPress={() => { setEditing(c); setEditorOpen(true); }}
+                onPress={() => {
+                  if (c.is_default) {
+                    show('Default categories are shared across users', {
+                      variant: 'info',
+                      description: 'Add your own custom category to personalize.',
+                    });
+                    return;
+                  }
+                  setEditing(c);
+                  setEditorOpen(true);
+                }}
                 style={styles.cell}
               >
                 <View style={[styles.iconCircle, { backgroundColor: `${c.color}25` }]}>

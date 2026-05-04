@@ -17,7 +17,7 @@ import { greeting } from '../../utils/date';
 export default function Dashboard() {
   const router = useRouter();
   const { user, isOfflineMode } = useAuth();
-  const { transactions, categories, settings, getMonthlyStats, refresh, syncStatus, hydrated } = useData();
+  const { transactions, categories, settings, getMonthlyStats, refresh, syncStatus, hydrated, profiles, activeProfile, switchProfile } = useData();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const stats = useMemo(() => getMonthlyStats(new Date()), [getMonthlyStats]);
@@ -62,6 +62,35 @@ export default function Dashboard() {
             </View>
             <SyncIndicator />
           </View>
+
+          {/* Active profile chip — tap to switch profiles via Settings */}
+          {profiles && profiles.length > 0 && activeProfile ? (
+            <View style={{ paddingHorizontal: SPACING.xl, marginBottom: SPACING.sm }}>
+              <Pressable
+                onPress={() => router.push('/(tabs)/settings')}
+                style={[
+                  styles.profileChip,
+                  { borderColor: `${activeProfile.color}55`, backgroundColor: `${activeProfile.color}18` },
+                ]}
+              >
+                <Ionicons name={activeProfile.icon} size={14} color={activeProfile.color} />
+                <Text
+                  style={{
+                    color: COLORS.textPrimary,
+                    fontFamily: FONT.medium,
+                    fontSize: 12,
+                    marginLeft: 6,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {activeProfile.name}
+                </Text>
+                {profiles.length > 1 ? (
+                  <Ionicons name="swap-horizontal" size={12} color={COLORS.textSecondary} style={{ marginLeft: 6 }} />
+                ) : null}
+              </Pressable>
+            </View>
+          ) : null}
 
           {/* Hero balance */}
           <View style={{ paddingHorizontal: SPACING.xl, marginTop: SPACING.md }}>
@@ -181,7 +210,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.md,
-    paddingBottom: SPACING.lg,
+    paddingBottom: SPACING.sm,
+  },
+  profileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
   },
   overBudget: {
     flexDirection: 'row',

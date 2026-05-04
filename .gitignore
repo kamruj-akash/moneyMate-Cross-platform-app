@@ -19,3 +19,6 @@ web-build/
 .vscode/
 .idea/
 android
+# Keystore (NEVER commit)
+android/app/*.keystore
+android/app/*.jks

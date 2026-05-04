@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { COLORS, FONT, RADIUS, SHADOWS, SPACING, TEXT_STYLES } from '../../constants/theme';
 import GradientBackground from '../../components/GradientBackground';
 import SyncIndicator from '../../components/SyncIndicator';
@@ -150,19 +150,26 @@ export default function Settings() {
         monthLabel: fmt(new Date(), 'MMMM yyyy'),
       });
       if (!r) show('PDF export not available', { variant: 'warning' });
-      else hSuccess();
-    } catch {
+      else {
+        hSuccess();
+        show('PDF exported', { variant: 'success', description: 'Choose where to save it.' });
+      }
+    } catch (e) {
       hError();
-      show('Could not export', { variant: 'error' });
+      show('Could not export PDF', { variant: 'error', description: e?.message });
     }
   };
   const backupJSON = async () => {
     try {
       await exportBackupJSON({ transactions, categories, recurring, settings });
       hSuccess();
-    } catch {
+      show('Backup ready', {
+        variant: 'success',
+        description: 'Pick a location to save the file.',
+      });
+    } catch (e) {
       hError();
-      show('Could not back up', { variant: 'error' });
+      show('Could not back up', { variant: 'error', description: e?.message });
     }
   };
 
@@ -188,14 +195,17 @@ export default function Settings() {
                 settings: data.settings || settings,
               });
               hSuccess();
-              show('Restored', { variant: 'success' });
+              show('Backup restored', {
+                variant: 'success',
+                description: `${data.transactions?.length || 0} transactions, ${data.categories?.length || 0} categories.`,
+              });
             },
           },
         ]
       );
-    } catch {
+    } catch (e) {
       hError();
-      show('Invalid backup file', { variant: 'error' });
+      show('Invalid backup file', { variant: 'error', description: e?.message });
     }
   };
 

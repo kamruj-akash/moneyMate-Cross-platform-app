@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { KEYS, getJSON, setJSON, remove, clearAllAppData } from '../lib/storage';
+import { KEYS, getJSON, setJSON, remove, clearAllAppData, clearLocalDataTables } from '../lib/storage';
 import { startAutoSync, stopAutoSync, fullSync } from '../lib/syncManager';
 
 const AuthContext = createContext(null);
@@ -51,6 +51,17 @@ export const AuthProvider = ({ children }) => {
   const signIn = useCallback(async (email, password) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, error: error.message };
+
+    // Account-switch protection: if previous local data belonged to a
+    // different user, wipe it before pulling cloud — otherwise we'd try to
+    // upsert the previous user's IDs and RLS would reject everything.
+    const newUserId = data?.session?.user?.id;
+    const lastUserId = await getJSON(KEYS.LAST_USER_ID, null);
+    if (newUserId && lastUserId && lastUserId !== newUserId) {
+      await clearLocalDataTables();
+    }
+    if (newUserId) await setJSON(KEYS.LAST_USER_ID, newUserId);
+
     setRestoring(true);
     try {
       await fullSync();
@@ -64,6 +75,10 @@ export const AuthProvider = ({ children }) => {
 
   const signOut = useCallback(async () => {
     try { await supabase.auth.signOut(); } catch {}
+    // Clear local cache so the next login starts fresh from cloud and we
+    // never mix data across accounts.
+    await clearLocalDataTables();
+    await remove(KEYS.LAST_USER_ID);
     setSession(null);
     setUser(null);
   }, []);

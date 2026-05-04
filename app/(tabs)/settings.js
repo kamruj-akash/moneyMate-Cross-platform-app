@@ -18,6 +18,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/ui/Toast';
 import { fullSync } from '../../lib/syncManager';
+import { supabase } from '../../lib/supabase';
+import { clearLocalDataTables, KEYS, remove } from '../../lib/storage';
 import { CURRENCY_OPTIONS, formatAmount } from '../../utils/currency';
 import { exportBackupJSON, exportTransactionsPDF } from '../../lib/export';
 import { fmt } from '../../utils/date';
@@ -38,6 +40,9 @@ export default function Settings() {
 
   const [recurringSheet, setRecurringSheet] = useState(false);
   const [currencySheet, setCurrencySheet] = useState(false);
+  const [deleteSheet, setDeleteSheet] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const [syncing, setSyncing] = useState(false);
 
@@ -73,29 +78,61 @@ export default function Settings() {
     ]);
   };
 
-  const onClearAllData = () => {
-    Alert.alert('Clear all local data?', 'Everything stored on this device will be removed. Cloud data is unaffected.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => {
-          Alert.alert('Are you absolutely sure?', 'This cannot be undone.', [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Yes, clear it',
-              style: 'destructive',
-              onPress: async () => {
-                await replaceAllData({ transactions: [], categories: [], recurring: [], settings: { ...settings, monthly_budget: 0 } });
-                hSuccess();
-                show('All local data cleared', { variant: 'success' });
-              },
-            },
-          ]);
-        },
-      },
-    ]);
+  const performDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      // Delete cloud rows first (so RLS doesn't block them once we sign out).
+      if (user?.id) {
+        await Promise.all([
+          supabase.from('transactions').delete().eq('user_id', user.id),
+          supabase.from('categories').delete().eq('user_id', user.id),
+          supabase.from('recurring_transactions').delete().eq('user_id', user.id),
+          supabase.from('user_settings').delete().eq('user_id', user.id),
+        ]);
+      }
+      // Wipe local data + last-user marker so next login is clean.
+      await clearLocalDataTables();
+      await remove(KEYS.LAST_USER_ID);
+      hSuccess();
+      show('All your data has been deleted', { variant: 'success' });
+      // Sign out and bounce to welcome.
+      await signOut();
+      router.replace('/(auth)/welcome');
+    } catch (e) {
+      hError();
+      show('Could not delete data. Try again.', { variant: 'error' });
+    } finally {
+      setDeleting(false);
+      setDeleteSheet(false);
+      setDeleteConfirm('');
+    }
   };
+
+  const openDeleteSheet = () => {
+    if (!user?.email) {
+      // Offline mode — just clear local
+      Alert.alert('Delete local data?', 'You are not signed in. This will wipe everything stored on this device.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await clearLocalDataTables();
+            hSuccess();
+            show('All local data cleared', { variant: 'success' });
+            router.replace('/(auth)/welcome');
+          },
+        },
+      ]);
+      return;
+    }
+    setDeleteConfirm('');
+    setDeleteSheet(true);
+  };
+
+  const deleteConfirmsMatch =
+    !!user?.email && deleteConfirm.trim().toLowerCase() === user.email.trim().toLowerCase();
 
   const saveBudget = async () => {
     const limit = Number(budgetInput) || 0;
@@ -266,9 +303,9 @@ export default function Settings() {
           <Section title="Danger zone">
             <Row
               icon="trash-outline"
-              label="Clear all local data"
+              label="Delete my data"
               danger
-              onPress={onClearAllData}
+              onPress={openDeleteSheet}
             />
           </Section>
         </ScrollView>
@@ -362,6 +399,64 @@ export default function Settings() {
                 />
               ))}
             </View>
+          </ScrollView>
+        </Sheet>
+
+        {/* Delete My Data Sheet */}
+        <Sheet visible={deleteSheet} onClose={() => !deleting && setDeleteSheet(false)}>
+          <SheetHeader title="Delete my data" onClose={() => !deleting && setDeleteSheet(false)} />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: SPACING.huge }} keyboardShouldPersistTaps="handled">
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-start',
+                backgroundColor: COLORS.expenseBg,
+                borderWidth: 1,
+                borderColor: COLORS.expenseBorder,
+                borderRadius: RADIUS.lg,
+                padding: SPACING.lg,
+                marginBottom: SPACING.xl,
+              }}
+            >
+              <Ionicons name="warning" size={20} color={COLORS.danger} style={{ marginRight: SPACING.sm, marginTop: 2 }} />
+              <Text style={{ color: COLORS.textPrimary, fontFamily: FONT.regular, fontSize: 14, lineHeight: 20, flex: 1 }}>
+                This will <Text style={{ fontFamily: FONT.semibold, color: COLORS.danger }}>permanently delete</Text> every transaction, category, recurring item, and setting from both the cloud and this device. The action cannot be undone.
+              </Text>
+            </View>
+
+            <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 13, marginBottom: SPACING.sm }}>
+              To confirm, type your email below:
+            </Text>
+            <Text style={{ color: COLORS.textPrimary, fontFamily: FONT.semibold, fontSize: 15, marginBottom: SPACING.md }}>
+              {user?.email}
+            </Text>
+
+            <Input
+              value={deleteConfirm}
+              onChangeText={setDeleteConfirm}
+              placeholder={user?.email}
+              variant="surface"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              leftIcon="mail-outline"
+              editable={!deleting}
+            />
+
+            <Button
+              title={deleting ? 'Deleting…' : 'Delete forever'}
+              variant="danger"
+              onPress={performDelete}
+              loading={deleting}
+              disabled={!deleteConfirmsMatch || deleting}
+              style={{ marginTop: SPACING.md }}
+            />
+            <Button
+              title="Cancel"
+              variant="ghost"
+              onPress={() => !deleting && setDeleteSheet(false)}
+              style={{ marginTop: SPACING.sm }}
+              disabled={deleting}
+            />
           </ScrollView>
         </Sheet>
       </SafeAreaView>

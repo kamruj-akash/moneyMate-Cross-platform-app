@@ -8,7 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { KEYS, getJSON, setJSON } from '../lib/storage';
-import { queueAction, subscribeSync, getQueueSize, getLastSync, fullSync, getIsOnline } from '../lib/syncManager';
+import { queueAction, queueActions, subscribeSync, getQueueSize, getLastSync, fullSync, getIsOnline } from '../lib/syncManager';
 import { uuid } from '../utils/uuid';
 import { DEFAULT_CATEGORIES } from '../constants/defaultCategories';
 import { monthRange, isSameDay, format, safeParse } from '../utils/date';
@@ -95,12 +95,19 @@ export const DataProvider = ({ children }) => {
       // Push to cloud after local data is consistent. Categories + recurring +
       // settings are small — push every authed boot so missed writes recover.
       // Transactions can be large — push only once per user (gated by flag).
+      // Use queueActions so all entries are appended in a single atomic write
+      // (parallel queueAction calls would race and lose writes).
       if (user?.id && !isOfflineMode) {
-        for (const c of cats) queueAction('upsert', 'categories', c);
-        for (const r of rec || []) queueAction('upsert', 'recurring_transactions', r);
-        if (set) queueAction('upsert', 'user_settings', set);
-        if (!pushedMap[user.id]) {
-          for (const t of tx || []) queueAction('upsert', 'transactions', t);
+        const actions = [];
+        for (const c of cats) actions.push({ type: 'upsert', table: 'categories', data: c });
+        for (const r of rec || []) actions.push({ type: 'upsert', table: 'recurring_transactions', data: r });
+        if (set) actions.push({ type: 'upsert', table: 'user_settings', data: set });
+        const pushTx = !pushedMap[user.id];
+        if (pushTx) {
+          for (const t of tx || []) actions.push({ type: 'upsert', table: 'transactions', data: t });
+        }
+        await queueActions(actions);
+        if (pushTx) {
           pushedMap[user.id] = true;
           await setJSON(KEYS.CLOUD_PUSHED, pushedMap || {});
         }

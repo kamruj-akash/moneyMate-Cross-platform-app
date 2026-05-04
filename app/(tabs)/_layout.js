@@ -3,7 +3,7 @@ import { View, Pressable, StyleSheet, Text, Platform } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONT, GRADIENTS, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { hMedium, hSelection } from '../../utils/haptics';
@@ -82,8 +82,8 @@ function TabButton({ focused, icon, label, onPress }) {
   return (
     <Animated.View style={[{ flex: 1 }, animStyle]}>
       <Pressable
-        onPressIn={() => { scale.value = withSpring(0.92, { damping: 14, stiffness: 240 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 14, stiffness: 240 }); }}
+        onPressIn={() => { scale.value = withTiming(0.94, { duration: 80, easing: Easing.out(Easing.cubic) }); }}
+        onPressOut={() => { scale.value = withTiming(1, { duration: 120, easing: Easing.out(Easing.cubic) }); }}
         onPress={onPress}
         style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 12 }}
       >
@@ -111,8 +111,8 @@ function FabButton({ onPress }) {
   return (
     <Animated.View style={[{ flex: 1, alignItems: 'center' }, animStyle]}>
       <Pressable
-        onPressIn={() => { scale.value = withSpring(0.92, { damping: 12, stiffness: 220 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 12, stiffness: 220 }); }}
+        onPressIn={() => { scale.value = withTiming(0.93, { duration: 90, easing: Easing.out(Easing.cubic) }); }}
+        onPressOut={() => { scale.value = withTiming(1, { duration: 130, easing: Easing.out(Easing.cubic) }); }}
         onPress={onPress}
         style={[styles.fabShadow, SHADOWS.glow]}
       >

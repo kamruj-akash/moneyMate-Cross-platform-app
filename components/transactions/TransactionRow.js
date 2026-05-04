@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { COLORS, FONT, RADIUS, SPACING } from '../../constants/theme';
 import { fmtTime } from '../../utils/date';
 import { formatSigned } from '../../utils/currency';
@@ -16,8 +16,8 @@ const TransactionRow = ({ tx, category, currency = 'BDT', onPress, style }) => {
   return (
     <Animated.View style={animStyle}>
       <Pressable
-        onPressIn={() => { scale.value = withSpring(0.98, { damping: 14, stiffness: 240 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 14, stiffness: 240 }); }}
+        onPressIn={() => { scale.value = withTiming(0.98, { duration: 80, easing: Easing.out(Easing.cubic) }); }}
+        onPressOut={() => { scale.value = withTiming(1, { duration: 120, easing: Easing.out(Easing.cubic) }); }}
         onPress={() => { hLight(); onPress?.(tx); }}
         style={[styles.row, style]}
       >

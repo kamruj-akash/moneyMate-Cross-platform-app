@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, Text, View, ActivityIndicator, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { COLORS, GRADIENTS, RADIUS, SHADOWS, SPACING, TEXT_STYLES, FONT } from '../../constants/theme';
 import { hLight } from '../../utils/haptics';
 
@@ -24,8 +24,8 @@ const Button = ({
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-  const onIn = () => { scale.value = withSpring(0.97, { damping: 14, stiffness: 220 }); };
-  const onOut = () => { scale.value = withSpring(1, { damping: 14, stiffness: 220 }); };
+  const onIn = () => { scale.value = withTiming(0.97, { duration: 100, easing: Easing.out(Easing.cubic) }); };
+  const onOut = () => { scale.value = withTiming(1, { duration: 140, easing: Easing.out(Easing.cubic) }); };
   const handlePress = () => {
     if (haptics) hLight();
     onPress?.();

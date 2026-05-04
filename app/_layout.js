@@ -4,13 +4,7 @@ import { Stack, SplashScreen } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SystemUI from 'expo-system-ui';
-import {
-  useFonts,
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-} from '@expo-google-fonts/inter';
+import { useFonts } from 'expo-font';
 
 import { COLORS } from '../constants/theme';
 import { AuthProvider } from '../context/AuthContext';
@@ -20,11 +14,13 @@ import { ToastProvider } from '../components/ui/Toast';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
+  // Load only the 4 weights we use (instead of all 18 from @expo-google-fonts/inter).
+  // Each require() pulls a single .ttf into the bundle, saving ~4-5 MB in the APK.
   const [fontsLoaded] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    Inter_400Regular: require('@expo-google-fonts/inter/400Regular/Inter_400Regular.ttf'),
+    Inter_500Medium: require('@expo-google-fonts/inter/500Medium/Inter_500Medium.ttf'),
+    Inter_600SemiBold: require('@expo-google-fonts/inter/600SemiBold/Inter_600SemiBold.ttf'),
+    Inter_700Bold: require('@expo-google-fonts/inter/700Bold/Inter_700Bold.ttf'),
   });
   const [ready, setReady] = useState(false);
 
@@ -66,7 +62,12 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
                 <Stack.Screen
                   name="add-transaction"
-                  options={{ presentation: 'transparentModal', animation: 'fade' }}
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                    animationDuration: 280,
+                    gestureEnabled: true,
+                  }}
                 />
                 <Stack.Screen name="transaction/[id]" options={{ animation: 'slide_from_right' }} />
               </Stack>

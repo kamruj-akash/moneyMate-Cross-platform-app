@@ -4,7 +4,8 @@
       "Bash(python3 -c ' *)",
       "Bash(bun install *)",
       "Bash(npx expo-doctor *)",
-      "Bash(npx expo *)"
+      "Bash(npx expo *)",
+      "Bash(bunx expo *)"
     ]
   }
 }

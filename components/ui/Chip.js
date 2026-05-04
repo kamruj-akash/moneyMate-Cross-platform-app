@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { COLORS, FONT, RADIUS, SHADOWS, SPACING } from '../../constants/theme';
 import { hSelection } from '../../utils/haptics';
 
@@ -14,8 +14,8 @@ const Chip = ({ label, icon, color, selected, onPress, size = 'md' }) => {
   return (
     <Animated.View style={animStyle}>
       <Pressable
-        onPressIn={() => { scale.value = withSpring(0.96, { damping: 14, stiffness: 240 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 14, stiffness: 240 }); }}
+        onPressIn={() => { scale.value = withTiming(0.96, { duration: 90, easing: Easing.out(Easing.cubic) }); }}
+        onPressOut={() => { scale.value = withTiming(1, { duration: 120, easing: Easing.out(Easing.cubic) }); }}
         onPress={() => { hSelection(); onPress?.(); }}
         style={[
           {

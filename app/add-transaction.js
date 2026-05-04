@@ -12,10 +12,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { COLORS, FONT, RADIUS, SHADOWS, SPACING, TEXT_STYLES } from '../constants/theme';
-import Sheet from '../components/ui/Sheet';
+import GradientBackground from '../components/GradientBackground';
 import Button from '../components/ui/Button';
 import Chip from '../components/ui/Chip';
 import SegmentedControl from '../components/ui/SegmentedControl';
@@ -24,7 +25,7 @@ import Input from '../components/ui/Input';
 import { useData } from '../context/DataContext';
 import { useToast } from '../components/ui/Toast';
 import { hSuccess, hError, hSelection } from '../utils/haptics';
-import { fmt, fmtRelative } from '../utils/date';
+import { fmtRelative } from '../utils/date';
 import { getCurrencySymbol } from '../utils/currency';
 
 export default function AddTransaction() {
@@ -42,7 +43,6 @@ export default function AddTransaction() {
   const { show } = useToast();
 
   const existing = useMemo(() => transactions.find((t) => t.id === id), [transactions, id]);
-  const [visible, setVisible] = useState(true);
   const [type, setType] = useState(existing?.type || 'expense');
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '');
   const [title, setTitle] = useState(existing?.title || '');
@@ -64,10 +64,7 @@ export default function AddTransaction() {
     }
   }, [filteredCats]);
 
-  const close = () => {
-    setVisible(false);
-    setTimeout(() => router.back(), 300);
-  };
+  const close = () => router.back();
 
   const onSave = async () => {
     const amt = Number(amount);
@@ -121,122 +118,129 @@ export default function AddTransaction() {
   };
 
   return (
-    <Sheet visible={visible} onClose={close} height="92%">
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: SPACING.huge }}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headerRow}>
-          <Text style={[TEXT_STYLES.h2]}>{isEdit ? 'Edit transaction' : 'Add transaction'}</Text>
-          <Pressable onPress={close} hitSlop={10} style={styles.closeBtn}>
-            <Ionicons name="close" size={20} color={COLORS.textPrimary} />
-          </Pressable>
-        </View>
-
-        <View style={styles.body}>
-          <SegmentedControl
-            options={[
-              { value: 'expense', label: 'Expense' },
-              { value: 'income', label: 'Income' },
-            ]}
-            value={type}
-            onChange={(v) => { hSelection(); setType(v); }}
-            accent={type === 'income' ? COLORS.income : COLORS.expense}
-          />
-
-          <View style={styles.amountWrap}>
-            <Text style={styles.amountPrefix}>{getCurrencySymbol(settings.currency)}</Text>
-            <TextInput
-              value={amount}
-              onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ''))}
-              placeholder="0"
-              placeholderTextColor={COLORS.textMuted}
-              keyboardType="decimal-pad"
-              style={styles.amountInput}
-              selectionColor={COLORS.primary}
-              maxLength={10}
-            />
+    <GradientBackground>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.headerRow}>
+            <Text style={[TEXT_STYLES.h2]}>{isEdit ? 'Edit transaction' : 'Add transaction'}</Text>
+            <Pressable onPress={close} hitSlop={10} style={styles.closeBtn}>
+              <Ionicons name="close" size={20} color={COLORS.textPrimary} />
+            </Pressable>
           </View>
 
-          <Text style={[TEXT_STYLES.label, { marginTop: SPACING.lg, marginBottom: SPACING.sm }]}>Category</Text>
           <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: SPACING.sm, paddingRight: SPACING.lg }}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: SPACING.huge }}
+            showsVerticalScrollIndicator={false}
           >
-            {filteredCats.map((c) => (
-              <Chip
-                key={c.id}
-                label={c.name}
-                icon={c.icon}
-                color={c.color}
-                selected={categoryId === c.id}
-                onPress={() => setCategoryId(c.id)}
-              />
-            ))}
-          </ScrollView>
-
-          <View style={{ marginTop: SPACING.lg }}>
-            <Input
-              label="Title"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="What was this for?"
-              variant="underline"
-              autoCapitalize="sentences"
-            />
-            <Input
-              label="Note (optional)"
-              value={note}
-              onChangeText={setNote}
-              placeholder="Additional details"
-              variant="underline"
-              multiline
-              autoCapitalize="sentences"
-            />
-          </View>
-
-          <Pressable style={styles.row} onPress={() => setShowDate(true)}>
-            <View style={styles.rowLeft}>
-              <Ionicons name="calendar-outline" size={20} color={COLORS.textSecondary} />
-              <Text style={styles.rowLabel}>Date</Text>
-            </View>
-            <Text style={styles.rowValue}>{fmtRelative(date)}</Text>
-          </Pressable>
-
-          {!isEdit ? (
-            <View style={styles.row}>
-              <View style={styles.rowLeft}>
-                <Ionicons name="repeat-outline" size={20} color={COLORS.textSecondary} />
-                <Text style={styles.rowLabel}>Make recurring</Text>
-              </View>
-              <Toggle value={recurring} onChange={setRecurring} />
-            </View>
-          ) : null}
-
-          {recurring && !isEdit ? (
-            <Animated.View entering={FadeIn} style={{ marginTop: SPACING.md }}>
-              <Text style={[TEXT_STYLES.label, { marginBottom: SPACING.sm }]}>Frequency</Text>
+            <View style={styles.body}>
               <SegmentedControl
                 options={[
-                  { value: 'daily', label: 'Daily' },
-                  { value: 'weekly', label: 'Weekly' },
-                  { value: 'monthly', label: 'Monthly' },
+                  { value: 'expense', label: 'Expense' },
+                  { value: 'income', label: 'Income' },
                 ]}
-                value={frequency}
-                onChange={setFrequency}
+                value={type}
+                onChange={(v) => { hSelection(); setType(v); }}
+                accent={type === 'income' ? COLORS.income : COLORS.expense}
               />
-            </Animated.View>
-          ) : null}
 
-          <Button
-            title={isEdit ? 'Save changes' : 'Save transaction'}
-            onPress={onSave}
-            style={{ marginTop: SPACING.xl }}
-          />
-        </View>
-      </ScrollView>
+              <View style={styles.amountWrap}>
+                <Text style={styles.amountPrefix}>{getCurrencySymbol(settings.currency)}</Text>
+                <TextInput
+                  value={amount}
+                  onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ''))}
+                  placeholder="0"
+                  placeholderTextColor={COLORS.textMuted}
+                  keyboardType="decimal-pad"
+                  style={styles.amountInput}
+                  selectionColor={COLORS.primary}
+                  maxLength={10}
+                />
+              </View>
+
+              <Text style={[TEXT_STYLES.label, { marginBottom: SPACING.sm }]}>Category</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: SPACING.sm, paddingRight: SPACING.lg }}
+              >
+                {filteredCats.map((c) => (
+                  <Chip
+                    key={c.id}
+                    label={c.name}
+                    icon={c.icon}
+                    color={c.color}
+                    selected={categoryId === c.id}
+                    onPress={() => setCategoryId(c.id)}
+                  />
+                ))}
+              </ScrollView>
+
+              <View style={{ marginTop: SPACING.lg }}>
+                <Input
+                  label="Title"
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="What was this for?"
+                  variant="underline"
+                  autoCapitalize="sentences"
+                />
+                <Input
+                  label="Note (optional)"
+                  value={note}
+                  onChangeText={setNote}
+                  placeholder="Additional details"
+                  variant="underline"
+                  multiline
+                  autoCapitalize="sentences"
+                />
+              </View>
+
+              <Pressable style={styles.row} onPress={() => setShowDate(true)}>
+                <View style={styles.rowLeft}>
+                  <Ionicons name="calendar-outline" size={20} color={COLORS.textSecondary} />
+                  <Text style={styles.rowLabel}>Date</Text>
+                </View>
+                <Text style={styles.rowValue}>{fmtRelative(date)}</Text>
+              </Pressable>
+
+              {!isEdit ? (
+                <View style={styles.row}>
+                  <View style={styles.rowLeft}>
+                    <Ionicons name="repeat-outline" size={20} color={COLORS.textSecondary} />
+                    <Text style={styles.rowLabel}>Make recurring</Text>
+                  </View>
+                  <Toggle value={recurring} onChange={setRecurring} />
+                </View>
+              ) : null}
+
+              {recurring && !isEdit ? (
+                <Animated.View entering={FadeIn} style={{ marginTop: SPACING.md }}>
+                  <Text style={[TEXT_STYLES.label, { marginBottom: SPACING.sm }]}>Frequency</Text>
+                  <SegmentedControl
+                    options={[
+                      { value: 'daily', label: 'Daily' },
+                      { value: 'weekly', label: 'Weekly' },
+                      { value: 'monthly', label: 'Monthly' },
+                    ]}
+                    value={frequency}
+                    onChange={setFrequency}
+                  />
+                </Animated.View>
+              ) : null}
+
+              <Button
+                title={isEdit ? 'Save changes' : 'Save transaction'}
+                onPress={onSave}
+                style={{ marginTop: SPACING.xxl }}
+              />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
 
       {showDate ? (
         Platform.OS === 'ios' ? (
@@ -266,7 +270,7 @@ export default function AddTransaction() {
           />
         )
       ) : null}
-    </Sheet>
+    </GradientBackground>
   );
 }
 
@@ -284,7 +288,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.sm,
+    paddingTop: SPACING.md,
     paddingBottom: SPACING.md,
   },
   closeBtn: {
@@ -294,13 +298,13 @@ const styles = StyleSheet.create({
   },
   body: {
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
+    paddingTop: SPACING.sm,
   },
   amountWrap: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'center',
-    marginVertical: SPACING.xxl,
+    marginVertical: SPACING.xxxl,
   },
   amountPrefix: {
     color: COLORS.textMuted,

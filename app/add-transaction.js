@@ -251,7 +251,7 @@ export default function AddTransaction() {
                 value={date}
                 mode="date"
                 display="spinner"
-                onChange={(_, d) => d && setDate(d)}
+                onChange={(_, d) => d && setDate(mergeDateKeepTime(d, date))}
                 themeVariant="dark"
                 textColor={COLORS.textPrimary}
               />
@@ -265,7 +265,7 @@ export default function AddTransaction() {
             display="default"
             onChange={(event, d) => {
               setShowDate(false);
-              if (event.type === 'set' && d) setDate(d);
+              if (event.type === 'set' && d) setDate(mergeDateKeepTime(d, date));
             }}
           />
         )
@@ -273,6 +273,15 @@ export default function AddTransaction() {
     </GradientBackground>
   );
 }
+
+// Date-only pickers return midnight for the picked day, which then renders as
+// "12:00 AM" in transaction rows. Keep the time-of-day from the previous value.
+const mergeDateKeepTime = (picked, previous) => {
+  const merged = new Date(picked);
+  const src = previous instanceof Date ? previous : new Date();
+  merged.setHours(src.getHours(), src.getMinutes(), src.getSeconds(), src.getMilliseconds());
+  return merged;
+};
 
 const nextRecurringFrom = (start, frequency) => {
   const d = new Date(start);

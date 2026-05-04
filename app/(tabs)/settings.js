@@ -163,27 +163,51 @@ export default function Settings() {
   const performDelete = async () => {
     if (deleting) return;
     setDeleting(true);
+    let accountDeleted = false;
+    let accountDeleteError = null;
     try {
       // Delete cloud rows first (so RLS doesn't block them once we sign out).
+      // profiles must be removed too — earlier this was missed and orphaned rows
+      // came back on re-login from another device.
       if (user?.id) {
         await Promise.all([
           supabase.from('transactions').delete().eq('user_id', user.id),
           supabase.from('categories').delete().eq('user_id', user.id),
           supabase.from('recurring_transactions').delete().eq('user_id', user.id),
           supabase.from('user_settings').delete().eq('user_id', user.id),
+          supabase.from('profiles').delete().eq('user_id', user.id),
         ]);
+
+        // Delete the auth user via SECURITY DEFINER RPC. The anon key can't
+        // touch auth.users directly, so this requires the `delete_user` SQL
+        // function to be installed in Supabase (see supabase/delete_user.sql).
+        const { error } = await supabase.rpc('delete_user');
+        if (error) {
+          accountDeleteError = error;
+        } else {
+          accountDeleted = true;
+        }
       }
       // Wipe local data + last-user marker so next login is clean.
       await clearLocalDataTables();
       await remove(KEYS.LAST_USER_ID);
       hSuccess();
-      show('All your data has been deleted', { variant: 'success' });
+      if (accountDeleted) {
+        show('Your account and all data have been deleted', { variant: 'success' });
+      } else if (accountDeleteError) {
+        show('Data deleted, but account could not be removed', {
+          variant: 'warning',
+          description: accountDeleteError.message || 'Run the delete_user SQL on Supabase.',
+        });
+      } else {
+        show('All local data cleared', { variant: 'success' });
+      }
       // Sign out and bounce to welcome.
       await signOut();
       router.replace('/(auth)/welcome');
     } catch (e) {
       hError();
-      show('Could not delete data. Try again.', { variant: 'error' });
+      show('Could not delete data. Try again.', { variant: 'error', description: e?.message });
     } finally {
       setDeleting(false);
       setDeleteSheet(false);
@@ -431,7 +455,7 @@ export default function Settings() {
               value={settings.currency || 'BDT'}
               onPress={() => setCurrencySheet(true)}
             />
-            <Row icon="information-circle-outline" label="App version" value="1.0.0" />
+            <Row icon="information-circle-outline" label="App version" value="1.1.0" />
           </Section>
 
           {/* Danger */}

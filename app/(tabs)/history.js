@@ -137,7 +137,7 @@ export default function History() {
         <View style={{ paddingHorizontal: SPACING.xl, paddingTop: SPACING.md, paddingBottom: SPACING.sm }}>
           <Text style={[TEXT_STYLES.h1]}>History</Text>
           <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 14, marginTop: 4 }}>
-            {filtered.length} transactions · {formatAmount(totalIncome - totalExpense, settings.currency)}
+            {filtered.length} {filtered.length === 1 ? 'transaction' : 'transactions'} · {formatAmount(totalIncome - totalExpense, settings.currency)}
           </Text>
         </View>
 
@@ -153,33 +153,37 @@ export default function History() {
           />
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: SPACING.xl, gap: SPACING.sm, paddingBottom: SPACING.md }}
-        >
-          {FILTERS.map((f) => (
-            <Chip
-              key={f.value}
-              label={f.label}
-              selected={filter === f.value}
-              onPress={() => setFilter(f.value)}
-            />
-          ))}
-        </ScrollView>
+        <View style={styles.filterBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: SPACING.xl, gap: SPACING.sm }}
+          >
+            {FILTERS.map((f) => (
+              <Chip
+                key={f.value}
+                label={f.label}
+                selected={filter === f.value}
+                onPress={() => setFilter(f.value)}
+              />
+            ))}
+          </ScrollView>
+        </View>
 
         {sections.length === 0 ? (
-          <EmptyState
-            icon="search-outline"
-            title="No transactions found"
-            subtitle={query ? 'Try a different search term' : 'Add some transactions to see them here'}
-          />
+          <View style={styles.emptyWrap}>
+            <EmptyState
+              icon="search-outline"
+              title="No transactions found"
+              subtitle={query ? 'Try a different search term' : 'Add some transactions to see them here'}
+            />
+          </View>
         ) : (
           <FlatList
             data={sections}
             keyExtractor={(item) => item.key}
             renderItem={renderItem}
-            contentContainerStyle={{ paddingBottom: 140, paddingHorizontal: SPACING.xl }}
+            contentContainerStyle={{ paddingTop: SPACING.sm, paddingBottom: 140, paddingHorizontal: SPACING.xl }}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} colors={[COLORS.primary]} />
@@ -192,6 +196,14 @@ export default function History() {
 }
 
 const styles = StyleSheet.create({
+  filterBar: {
+    paddingBottom: SPACING.md,
+  },
+  emptyWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 120,
+  },
   dateHeader: {
     paddingTop: SPACING.lg,
     paddingBottom: SPACING.sm,

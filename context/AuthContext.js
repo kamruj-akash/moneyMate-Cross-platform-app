@@ -49,28 +49,33 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const signIn = useCallback(async (email, password) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { ok: false, error: error.message };
-
-    // Account-switch protection: if previous local data belonged to a
-    // different user, wipe it before pulling cloud — otherwise we'd try to
-    // upsert the previous user's IDs and RLS would reject everything.
-    const newUserId = data?.session?.user?.id;
-    const lastUserId = await getJSON(KEYS.LAST_USER_ID, null);
-    if (newUserId && lastUserId && lastUserId !== newUserId) {
-      await clearLocalDataTables();
-    }
-    if (newUserId) await setJSON(KEYS.LAST_USER_ID, newUserId);
-
+    // IMPORTANT: flip `restoring` BEFORE signInWithPassword. Supabase's
+    // auth listener fires synchronously when the session is set, which
+    // triggers DataContext's effect via user.id change. If `restoring` is
+    // still false at that moment, DataContext reads a half-cleared cache
+    // (no cats yet) and seeds fresh UUIDs which then get pushed to cloud
+    // alongside the cats that fullSync is about to pull — causing dupes.
     setRestoring(true);
     try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { ok: false, error: error.message };
+
+      // Account-switch protection: if previous local data belonged to a
+      // different user, wipe it before pulling cloud.
+      const newUserId = data?.session?.user?.id;
+      const lastUserId = await getJSON(KEYS.LAST_USER_ID, null);
+      if (newUserId && lastUserId && lastUserId !== newUserId) {
+        await clearLocalDataTables();
+      }
+      if (newUserId) await setJSON(KEYS.LAST_USER_ID, newUserId);
+
       await fullSync();
+      await remove(KEYS.OFFLINE_MODE);
+      setIsOfflineMode(false);
+      return { ok: true, data };
     } finally {
       setRestoring(false);
     }
-    await remove(KEYS.OFFLINE_MODE);
-    setIsOfflineMode(false);
-    return { ok: true, data };
   }, []);
 
   const signOut = useCallback(async () => {

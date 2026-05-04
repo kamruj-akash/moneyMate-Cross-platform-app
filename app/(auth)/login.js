@@ -29,7 +29,12 @@ export default function Login() {
     setLoading(false);
     if (!r.ok) {
       hError();
-      setError(r.error || 'Login failed');
+      const msg = (r.error || '').toLowerCase();
+      if (msg.includes('email') && msg.includes('confirm')) {
+        setError('Please verify your email before logging in. Check your inbox for the confirmation link.');
+      } else {
+        setError(r.error || 'Login failed');
+      }
       return;
     }
     hSuccess();
@@ -37,11 +42,11 @@ export default function Login() {
     router.replace('/(tabs)');
   };
 
-  const onForgot = async () => {
-    if (!email.includes('@')) return setError('Enter your email first');
-    const r = await resetPassword(email.trim());
-    if (r.ok) show('Password reset email sent', { variant: 'success' });
-    else show(r.error || 'Could not send reset email', { variant: 'error' });
+  const onForgot = () => {
+    router.push({
+      pathname: '/(auth)/forgot-password',
+      params: email ? { email: email.trim() } : {},
+    });
   };
 
   if (restoring) {

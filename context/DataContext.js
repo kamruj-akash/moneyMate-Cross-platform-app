@@ -31,12 +31,27 @@ const DEFAULT_SETTINGS = {
 
 const nowISO = () => new Date().toISOString();
 
+const DEFAULT_PROFILE = (userId) => ({
+  id: uuid(),
+  user_id: userId || null,
+  name: 'Personal',
+  icon: 'person-circle-outline',
+  color: '#7F5AF0',
+  monthly_budget: 0,
+  alert_threshold: 80,
+  is_default: true,
+  created_at: nowISO(),
+  updated_at: nowISO(),
+});
+
 export const DataProvider = ({ children }) => {
-  const { isAuthenticated, isOfflineMode, user, bootstrapping } = useAuth();
+  const { isAuthenticated, isOfflineMode, user, bootstrapping, restoring } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [recurring, setRecurring] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [profiles, setProfiles] = useState([]);
+  const [activeProfileId, setActiveProfileIdState] = useState(null);
   const [hydrated, setHydrated] = useState(false);
   const [syncStatus, setSyncStatus] = useState({ phase: 'idle', queue: 0, online: true, lastSync: null });
   const initOnceRef = useRef(false);
@@ -57,15 +72,23 @@ export const DataProvider = ({ children }) => {
     setSettings(next);
     await setJSON(KEYS.SETTINGS, next);
   }, []);
+  const persistProfiles = useCallback(async (next) => {
+    setProfiles(next);
+    await setJSON(KEYS.PROFILES, next);
+  }, []);
+  const persistActiveProfileId = useCallback(async (id) => {
+    setActiveProfileIdState(id);
+    if (id) await setJSON(KEYS.ACTIVE_PROFILE_ID, id);
+  }, []);
 
   // Single hydrate-and-sync effect: read local data, seed defaults if empty,
-  // then push to cloud. All sequential to avoid race conditions where a
-  // previous version could read empty before seed wrote, and never re-push.
+  // then push to cloud. Waits for `restoring` so we never read AsyncStorage
+  // mid-login (cleared local + cloud not yet pulled = false-empty seed).
   useEffect(() => {
-    if (bootstrapping) return;
+    if (bootstrapping || restoring) return;
     let mounted = true;
     (async () => {
-      let [tx, cat, rec, set, qs, ls, online, pushedMap] = await Promise.all([
+      let [tx, cat, rec, set, qs, ls, online, pushedMap, profilesLocal, activeIdLocal] = await Promise.all([
         getJSON(KEYS.TRANSACTIONS, []),
         getJSON(KEYS.CATEGORIES, []),
         getJSON(KEYS.RECURRING, []),
@@ -74,24 +97,46 @@ export const DataProvider = ({ children }) => {
         getLastSync(),
         getIsOnline(),
         getJSON(KEYS.CLOUD_PUSHED, {}),
+        getJSON(KEYS.PROFILES, []),
+        getJSON(KEYS.ACTIVE_PROFILE_ID, null),
       ]);
 
+      const hasOwner = !!user?.id || isOfflineMode;
+
+      // Seed default category set with stable UUIDs (these match cloud globals
+      // and are read-only). Only when an owner exists.
       let cats = cat || [];
-      if (!cats || cats.length === 0) {
+      if (hasOwner && (!cats || cats.length === 0)) {
         cats = DEFAULT_CATEGORIES.map((c) => ({
           ...c,
-          id: uuid(),
           created_at: nowISO(),
           updated_at: nowISO(),
         }));
         await setJSON(KEYS.CATEGORIES, cats);
       }
 
+      // Seed default profile if owner exists and none yet.
+      let profs = profilesLocal || [];
+      if (hasOwner && profs.length === 0) {
+        const def = DEFAULT_PROFILE(user?.id);
+        profs = [def];
+        await setJSON(KEYS.PROFILES, profs);
+      }
+
+      // Pick an active profile: stored choice if still valid, else default, else first.
+      let activeId = activeIdLocal;
+      if (!activeId || !profs.find((p) => p.id === activeId)) {
+        activeId = profs.find((p) => p.is_default)?.id || profs[0]?.id || null;
+      }
+      if (activeId) await setJSON(KEYS.ACTIVE_PROFILE_ID, activeId);
+
       if (!mounted) return;
       setTransactions(tx || []);
       setCategories(cats);
       setRecurring(rec || []);
       setSettings(set || DEFAULT_SETTINGS);
+      setProfiles(profs);
+      setActiveProfileIdState(activeId);
       setSyncStatus((s) => ({ ...s, queue: qs, lastSync: ls, online }));
       setHydrated(true);
 
@@ -102,7 +147,13 @@ export const DataProvider = ({ children }) => {
       // (parallel queueAction calls would race and lose writes).
       if (user?.id && !isOfflineMode) {
         const actions = [];
-        for (const c of cats) actions.push({ type: 'upsert', table: 'categories', data: c });
+        // Profiles must sync first (FK dependency).
+        for (const p of profs) actions.push({ type: 'upsert', table: 'profiles', data: p });
+        // Skip is_default cats — they're shared globals (user_id NULL) in cloud.
+        for (const c of cats) {
+          if (c.is_default) continue;
+          actions.push({ type: 'upsert', table: 'categories', data: c });
+        }
         for (const r of rec || []) actions.push({ type: 'upsert', table: 'recurring_transactions', data: r });
         if (set) actions.push({ type: 'upsert', table: 'user_settings', data: set });
         const pushTx = !pushedMap[user.id];
@@ -117,7 +168,7 @@ export const DataProvider = ({ children }) => {
       }
     })();
     return () => { mounted = false; };
-  }, [user?.id, isOfflineMode, bootstrapping]);
+  }, [user?.id, isOfflineMode, bootstrapping, restoring]);
 
   useEffect(() => {
     const unsub = subscribeSync(async (event) => {
@@ -151,6 +202,7 @@ export const DataProvider = ({ children }) => {
         title: input.title || '',
         note: input.note || null,
         category_id: input.category_id || null,
+        profile_id: input.profile_id || activeProfileId || null,
         date: input.date || nowISO(),
         recurring_id: input.recurring_id || null,
         created_at: nowISO(),
@@ -161,23 +213,28 @@ export const DataProvider = ({ children }) => {
       if (isAuthenticated && !isOfflineMode) {
         queueAction('insert', 'transactions', item);
       }
-      // Budget alert
+      // Budget alert (uses ACTIVE profile's budget)
       try {
+        const activeProfile = profiles.find((p) => p.id === activeProfileId);
         const { start, end } = monthRange(new Date());
         const monthExpense = next
-          .filter((t) => t.type === 'expense' && safeParse(t.date) >= start && safeParse(t.date) <= end)
+          .filter((t) =>
+            t.type === 'expense' &&
+            (!t.profile_id || t.profile_id === activeProfileId) &&
+            safeParse(t.date) >= start && safeParse(t.date) <= end
+          )
           .reduce((s, t) => s + Number(t.amount), 0);
-        if (settings.notifications_enabled !== false) {
+        if (settings.notifications_enabled !== false && activeProfile) {
           maybeAlertBudget({
             monthExpense,
-            budget: settings.monthly_budget,
-            alertThreshold: settings.alert_threshold,
+            budget: activeProfile.monthly_budget,
+            alertThreshold: activeProfile.alert_threshold,
           }).catch(() => {});
         }
       } catch {}
       return item;
     },
-    [transactions, isAuthenticated, isOfflineMode, persistTx, settings]
+    [transactions, isAuthenticated, isOfflineMode, persistTx, settings, profiles, activeProfileId]
   );
 
   const updateTransaction = useCallback(
@@ -216,6 +273,7 @@ export const DataProvider = ({ children }) => {
         color: input.color || '#7F5AF0',
         type: input.type || 'expense',
         is_default: false,
+        profile_id: input.profile_id || activeProfileId || null,
         created_at: nowISO(),
         updated_at: nowISO(),
       };
@@ -226,11 +284,14 @@ export const DataProvider = ({ children }) => {
       }
       return item;
     },
-    [categories, isAuthenticated, isOfflineMode, persistCat]
+    [categories, isAuthenticated, isOfflineMode, persistCat, activeProfileId]
   );
 
   const updateCategory = useCallback(
     async (id, patch) => {
+      const target = categories.find((c) => c.id === id);
+      // Defaults are shared globals — never modify, never push to cloud.
+      if (target?.is_default) return target;
       const next = categories.map((c) => (c.id === id ? { ...c, ...patch, updated_at: nowISO() } : c));
       await persistCat(next);
       const u = next.find((c) => c.id === id);
@@ -244,6 +305,9 @@ export const DataProvider = ({ children }) => {
 
   const deleteCategory = useCallback(
     async (id) => {
+      const target = categories.find((c) => c.id === id);
+      // Defaults are shared globals — cannot be deleted by an end user.
+      if (target?.is_default) return;
       const next = categories.filter((c) => c.id !== id);
       await persistCat(next);
       if (isAuthenticated && !isOfflineMode) {
@@ -263,6 +327,7 @@ export const DataProvider = ({ children }) => {
         title: input.title || '',
         note: input.note || null,
         category_id: input.category_id || null,
+        profile_id: input.profile_id || activeProfileId || null,
         frequency: input.frequency || 'monthly',
         start_date: input.start_date || nowISO(),
         next_due_date: input.next_due_date || input.start_date || nowISO(),
@@ -278,7 +343,7 @@ export const DataProvider = ({ children }) => {
       }
       return item;
     },
-    [recurring, isAuthenticated, isOfflineMode, persistRec]
+    [recurring, isAuthenticated, isOfflineMode, persistRec, activeProfileId]
   );
 
   const updateRecurring = useCallback(
@@ -318,14 +383,94 @@ export const DataProvider = ({ children }) => {
     [settings, isAuthenticated, isOfflineMode, persistSettings]
   );
 
+  // ---------- Profiles ----------
+  const addProfile = useCallback(
+    async (input) => {
+      const item = {
+        id: uuid(),
+        user_id: user?.id || null,
+        name: input.name?.trim() || 'Untitled',
+        icon: input.icon || 'person-circle-outline',
+        color: input.color || '#7F5AF0',
+        monthly_budget: Number(input.monthly_budget) || 0,
+        alert_threshold: Number(input.alert_threshold) || 80,
+        is_default: false,
+        created_at: nowISO(),
+        updated_at: nowISO(),
+      };
+      const next = [...profiles, item];
+      await persistProfiles(next);
+      if (isAuthenticated && !isOfflineMode) {
+        queueAction('insert', 'profiles', item);
+      }
+      return item;
+    },
+    [profiles, isAuthenticated, isOfflineMode, persistProfiles, user?.id]
+  );
+
+  const updateProfile = useCallback(
+    async (id, patch) => {
+      const next = profiles.map((p) => (p.id === id ? { ...p, ...patch, updated_at: nowISO() } : p));
+      await persistProfiles(next);
+      const u = next.find((p) => p.id === id);
+      if (isAuthenticated && !isOfflineMode && u) {
+        queueAction('update', 'profiles', u);
+      }
+      return u;
+    },
+    [profiles, isAuthenticated, isOfflineMode, persistProfiles]
+  );
+
+  const deleteProfile = useCallback(
+    async (id) => {
+      // Don't allow deleting the last profile or the default one.
+      if (profiles.length <= 1) return false;
+      const target = profiles.find((p) => p.id === id);
+      if (!target || target.is_default) return false;
+
+      const next = profiles.filter((p) => p.id !== id);
+      // Cascade-delete this profile's local data so it doesn't linger.
+      const nextTx = transactions.filter((t) => t.profile_id !== id);
+      const nextCat = categories.filter((c) => c.profile_id !== id);
+      const nextRec = recurring.filter((r) => r.profile_id !== id);
+      await Promise.all([
+        persistProfiles(next),
+        persistTx(nextTx),
+        persistCat(nextCat),
+        persistRec(nextRec),
+      ]);
+      if (isAuthenticated && !isOfflineMode) {
+        // Cloud cascade is handled server-side via ON DELETE CASCADE on profile_id FKs.
+        queueAction('delete', 'profiles', { id });
+      }
+      // If the active profile was just deleted, switch to default.
+      if (activeProfileId === id) {
+        const fallback = next.find((p) => p.is_default)?.id || next[0]?.id;
+        await persistActiveProfileId(fallback);
+      }
+      return true;
+    },
+    [profiles, transactions, categories, recurring, activeProfileId, isAuthenticated, isOfflineMode, persistProfiles, persistTx, persistCat, persistRec, persistActiveProfileId]
+  );
+
+  const switchProfile = useCallback(
+    async (id) => {
+      if (!profiles.find((p) => p.id === id)) return;
+      await persistActiveProfileId(id);
+    },
+    [profiles, persistActiveProfileId]
+  );
+
+  // Backwards-compat: updateBudget now writes to the active profile's budget.
   const updateBudget = useCallback(
     async (monthlyLimit, alertThreshold) => {
+      if (!activeProfileId) return null;
       const patch = {};
       if (monthlyLimit !== undefined) patch.monthly_budget = Number(monthlyLimit) || 0;
       if (alertThreshold !== undefined) patch.alert_threshold = Number(alertThreshold) || 80;
-      return updateSettings(patch);
+      return updateProfile(activeProfileId, patch);
     },
-    [updateSettings]
+    [activeProfileId, updateProfile]
   );
 
   // ---------- Recurring processor ----------
@@ -358,11 +503,35 @@ export const DataProvider = ({ children }) => {
     return { added: created.length };
   }, [recurring, transactions, isAuthenticated, isOfflineMode, persistTx, persistRec]);
 
+  // ---------- Profile-scoped views ----------
+  // The whole app should "see" only the active profile's data. CRUD methods
+  // still operate on the full lists internally; consumers only get filtered.
+  const scopedTransactions = useMemo(() => {
+    if (!activeProfileId) return transactions;
+    return transactions.filter((t) => !t.profile_id || t.profile_id === activeProfileId);
+  }, [transactions, activeProfileId]);
+
+  const scopedCategories = useMemo(() => {
+    if (!activeProfileId) return categories;
+    // Show globals (defaults) + cats belonging to this profile (or unscoped legacy).
+    return categories.filter((c) => c.is_default || !c.profile_id || c.profile_id === activeProfileId);
+  }, [categories, activeProfileId]);
+
+  const scopedRecurring = useMemo(() => {
+    if (!activeProfileId) return recurring;
+    return recurring.filter((r) => !r.profile_id || r.profile_id === activeProfileId);
+  }, [recurring, activeProfileId]);
+
+  const activeProfile = useMemo(
+    () => profiles.find((p) => p.id === activeProfileId) || null,
+    [profiles, activeProfileId]
+  );
+
   // ---------- Stats ----------
   const getMonthlyStats = useCallback(
     (month = new Date()) => {
       const { start, end } = monthRange(month);
-      const inMonth = transactions.filter((t) => {
+      const inMonth = scopedTransactions.filter((t) => {
         const d = safeParse(t.date);
         return d >= start && d <= end;
       });
@@ -376,7 +545,7 @@ export const DataProvider = ({ children }) => {
         byCategoryMap.set(key, prev + Number(t.amount));
       }
       const byCategory = Array.from(byCategoryMap.entries()).map(([category_id, amount]) => {
-        const cat = categories.find((c) => c.id === category_id);
+        const cat = scopedCategories.find((c) => c.id === category_id);
         return {
           category_id,
           name: cat?.name || 'Uncategorized',
@@ -399,7 +568,7 @@ export const DataProvider = ({ children }) => {
 
       return { income, expense, net: income - expense, byCategory, dailyTrend, count: inMonth.length };
     },
-    [transactions, categories]
+    [scopedTransactions, scopedCategories]
   );
 
   const getMultiMonthStats = useCallback(
@@ -408,7 +577,7 @@ export const DataProvider = ({ children }) => {
       for (let i = months - 1; i >= 0; i--) {
         const d = new Date(ref.getFullYear(), ref.getMonth() - i, 1);
         const { start, end } = monthRange(d);
-        const inMonth = transactions.filter((t) => {
+        const inMonth = scopedTransactions.filter((t) => {
           const dt = safeParse(t.date);
           return dt >= start && dt <= end;
         });
@@ -418,7 +587,7 @@ export const DataProvider = ({ children }) => {
       }
       return result;
     },
-    [transactions]
+    [scopedTransactions]
   );
 
   const refresh = useCallback(async () => {
@@ -453,11 +622,29 @@ export const DataProvider = ({ children }) => {
   const value = useMemo(
     () => ({
       hydrated,
-      transactions,
-      categories,
-      recurring,
-      settings,
+      // PUBLIC views — already filtered to active profile.
+      transactions: scopedTransactions,
+      categories: scopedCategories,
+      recurring: scopedRecurring,
+      // Settings remain user-level (currency, name, mobile, birth, notifications).
+      // Budget/threshold now live on the active profile.
+      settings: {
+        ...settings,
+        // Backwards-compat: expose the active profile's budget on settings so
+        // existing screens that read settings.monthly_budget keep working.
+        monthly_budget: activeProfile?.monthly_budget ?? 0,
+        alert_threshold: activeProfile?.alert_threshold ?? 80,
+      },
       syncStatus,
+      // Profile-related
+      profiles,
+      activeProfileId,
+      activeProfile,
+      addProfile,
+      updateProfile,
+      deleteProfile,
+      switchProfile,
+      // CRUD
       addTransaction,
       updateTransaction,
       deleteTransaction,
@@ -478,11 +665,18 @@ export const DataProvider = ({ children }) => {
     }),
     [
       hydrated,
-      transactions,
-      categories,
-      recurring,
+      scopedTransactions,
+      scopedCategories,
+      scopedRecurring,
       settings,
+      profiles,
+      activeProfileId,
+      activeProfile,
       syncStatus,
+      addProfile,
+      updateProfile,
+      deleteProfile,
+      switchProfile,
       addTransaction,
       updateTransaction,
       deleteTransaction,

@@ -19,7 +19,6 @@ import { useAuth } from './AuthContext';
 const DataContext = createContext(null);
 
 const DEFAULT_SETTINGS = {
-  id: null,
   currency: 'BDT',
   monthly_budget: 0,
   alert_threshold: 80,
@@ -30,7 +29,7 @@ const DEFAULT_SETTINGS = {
 const nowISO = () => new Date().toISOString();
 
 export const DataProvider = ({ children }) => {
-  const { isAuthenticated, isOfflineMode, user } = useAuth();
+  const { isAuthenticated, isOfflineMode, user, bootstrapping } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [recurring, setRecurring] = useState([]);
@@ -56,10 +55,14 @@ export const DataProvider = ({ children }) => {
     await setJSON(KEYS.SETTINGS, next);
   }, []);
 
+  // Single hydrate-and-sync effect: read local data, seed defaults if empty,
+  // then push to cloud. All sequential to avoid race conditions where a
+  // previous version could read empty before seed wrote, and never re-push.
   useEffect(() => {
+    if (bootstrapping) return;
     let mounted = true;
     (async () => {
-      const [tx, cat, rec, set, qs, ls, online] = await Promise.all([
+      let [tx, cat, rec, set, qs, ls, online, pushedMap] = await Promise.all([
         getJSON(KEYS.TRANSACTIONS, []),
         getJSON(KEYS.CATEGORIES, []),
         getJSON(KEYS.RECURRING, []),
@@ -67,9 +70,8 @@ export const DataProvider = ({ children }) => {
         getQueueSize(),
         getLastSync(),
         getIsOnline(),
+        getJSON(KEYS.CLOUD_PUSHED, {}),
       ]);
-      if (!mounted) return;
-      setTransactions(tx || []);
 
       let cats = cat || [];
       if (!cats || cats.length === 0) {
@@ -80,19 +82,32 @@ export const DataProvider = ({ children }) => {
           updated_at: nowISO(),
         }));
         await setJSON(KEYS.CATEGORIES, cats);
-        // For authed users with empty cloud → push defaults to cloud too
-        if (isAuthenticated && !isOfflineMode) {
-          for (const c of cats) queueAction('insert', 'categories', c);
-        }
       }
+
+      if (!mounted) return;
+      setTransactions(tx || []);
       setCategories(cats);
       setRecurring(rec || []);
       setSettings(set || DEFAULT_SETTINGS);
       setSyncStatus((s) => ({ ...s, queue: qs, lastSync: ls, online }));
       setHydrated(true);
+
+      // Push to cloud after local data is consistent. Categories + recurring +
+      // settings are small — push every authed boot so missed writes recover.
+      // Transactions can be large — push only once per user (gated by flag).
+      if (user?.id && !isOfflineMode) {
+        for (const c of cats) queueAction('upsert', 'categories', c);
+        for (const r of rec || []) queueAction('upsert', 'recurring_transactions', r);
+        if (set) queueAction('upsert', 'user_settings', set);
+        if (!pushedMap[user.id]) {
+          for (const t of tx || []) queueAction('upsert', 'transactions', t);
+          pushedMap[user.id] = true;
+          await setJSON(KEYS.CLOUD_PUSHED, pushedMap || {});
+        }
+      }
     })();
     return () => { mounted = false; };
-  }, [isAuthenticated, isOfflineMode]);
+  }, [user?.id, isOfflineMode, bootstrapping]);
 
   useEffect(() => {
     const unsub = subscribeSync(async (event) => {
@@ -107,22 +122,6 @@ export const DataProvider = ({ children }) => {
     });
     return () => unsub();
   }, []);
-
-  // Re-hydrate after auth changes (cloud merge already done by AuthContext.signIn -> syncManager.fullSync)
-  useEffect(() => {
-    (async () => {
-      const [tx, cat, rec, set] = await Promise.all([
-        getJSON(KEYS.TRANSACTIONS, []),
-        getJSON(KEYS.CATEGORIES, []),
-        getJSON(KEYS.RECURRING, []),
-        getJSON(KEYS.SETTINGS, null),
-      ]);
-      setTransactions(tx || []);
-      setCategories(cat || []);
-      setRecurring(rec || []);
-      if (set) setSettings(set);
-    })();
-  }, [user?.id]);
 
   // Process recurring once after hydration (and on auth/user change)
   useEffect(() => {

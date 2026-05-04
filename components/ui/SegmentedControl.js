@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { View, Text, Pressable, useWindowDimensions } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
 import { COLORS, FONT, RADIUS, SPACING } from '../../constants/theme';
 import { hSelection } from '../../utils/haptics';
 
@@ -9,7 +9,7 @@ const SegmentedControl = ({ options, value, onChange, fullWidth = true, accent }
   const t = useSharedValue(idx);
 
   useEffect(() => {
-    t.value = withSpring(idx, { damping: 18, stiffness: 220 });
+    t.value = withTiming(idx, { duration: 180, easing: Easing.out(Easing.cubic) });
   }, [idx]);
 
   return (

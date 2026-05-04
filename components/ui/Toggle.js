@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Pressable } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { COLORS } from '../../constants/theme';
 import { hSelection } from '../../utils/haptics';
 
@@ -9,8 +9,8 @@ const Toggle = ({ value, onChange, disabled }) => {
   const bg = useSharedValue(value ? 1 : 0);
 
   useEffect(() => {
-    x.value = withSpring(value ? 24 : 4, { damping: 18, stiffness: 240 });
-    bg.value = withTiming(value ? 1 : 0, { duration: 180 });
+    x.value = withTiming(value ? 24 : 4, { duration: 160, easing: Easing.out(Easing.cubic) });
+    bg.value = withTiming(value ? 1 : 0, { duration: 160 });
   }, [value]);
 
   const trackStyle = useAnimatedStyle(() => ({

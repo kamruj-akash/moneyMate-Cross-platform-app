@@ -9,6 +9,7 @@ import { COLORS, FONT, RADIUS, SHADOWS, SPACING, TEXT_STYLES } from '../../const
 import GradientBackground from '../../components/GradientBackground';
 import SyncIndicator from '../../components/SyncIndicator';
 import Sheet from '../../components/ui/Sheet';
+import SheetHeader from '../../components/ui/SheetHeader';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import Toggle from '../../components/ui/Toggle';
@@ -18,7 +19,7 @@ import { useData } from '../../context/DataContext';
 import { useToast } from '../../components/ui/Toast';
 import { fullSync } from '../../lib/syncManager';
 import { CURRENCY_OPTIONS, formatAmount } from '../../utils/currency';
-import { exportTransactionsCSV, exportBackupJSON, exportTransactionsPDF } from '../../lib/export';
+import { exportBackupJSON, exportTransactionsPDF } from '../../lib/export';
 import { fmt } from '../../utils/date';
 import { hSuccess, hError } from '../../utils/haptics';
 
@@ -105,15 +106,6 @@ export default function Settings() {
     setBudgetSheet(false);
   };
 
-  const exportCSV = async () => {
-    try {
-      await exportTransactionsCSV(transactions, categories, settings.currency);
-      hSuccess();
-    } catch (e) {
-      hError();
-      show('Could not export', { variant: 'error' });
-    }
-  };
   const exportPDF = async () => {
     try {
       const r = await exportTransactionsPDF({
@@ -253,10 +245,9 @@ export default function Settings() {
 
           {/* Data */}
           <Section title="Data">
-            <Row icon="document-text-outline" label="Export to CSV" onPress={exportCSV} />
             <Row icon="document-outline" label="Export to PDF" onPress={exportPDF} />
-            <Row icon="cloud-download-outline" label="Backup to JSON" onPress={backupJSON} />
-            <Row icon="cloud-upload-outline" label="Restore from JSON" onPress={restoreJSON} />
+            <Row icon="cloud-download-outline" label="Backup" onPress={backupJSON} />
+            <Row icon="cloud-upload-outline" label="Restore" onPress={restoreJSON} />
             <Row icon="grid-outline" label="Manage categories" onPress={() => router.push('/(tabs)/categories')} />
           </Section>
 
@@ -283,13 +274,13 @@ export default function Settings() {
         </ScrollView>
 
         {/* Budget Sheet */}
-        <Sheet visible={budgetSheet} onClose={() => setBudgetSheet(false)} height="60%">
-          <ScrollView contentContainerStyle={{ padding: SPACING.xl, paddingBottom: SPACING.huge }}>
-            <Text style={TEXT_STYLES.h2}>Monthly budget</Text>
-            <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 14, marginTop: 4, marginBottom: SPACING.xl }}>
-              Set how much you want to spend each month
-            </Text>
-
+        <Sheet visible={budgetSheet} onClose={() => setBudgetSheet(false)}>
+          <SheetHeader
+            title="Monthly budget"
+            subtitle="Set how much you want to spend each month"
+            onClose={() => setBudgetSheet(false)}
+          />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: SPACING.huge }} keyboardShouldPersistTaps="handled">
             <Input
               label="Budget amount"
               value={budgetInput}
@@ -314,9 +305,9 @@ export default function Settings() {
         </Sheet>
 
         {/* Recurring Sheet */}
-        <Sheet visible={recurringSheet} onClose={() => setRecurringSheet(false)} height="80%">
-          <ScrollView contentContainerStyle={{ padding: SPACING.xl, paddingBottom: SPACING.huge }}>
-            <Text style={[TEXT_STYLES.h2, { marginBottom: SPACING.xl }]}>Recurring</Text>
+        <Sheet visible={recurringSheet} onClose={() => setRecurringSheet(false)}>
+          <SheetHeader title="Recurring" onClose={() => setRecurringSheet(false)} />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: SPACING.huge }}>
             {recurring.length === 0 ? (
               <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 14 }}>
                 No recurring transactions yet. Create one when adding a transaction.
@@ -358,9 +349,9 @@ export default function Settings() {
         </Sheet>
 
         {/* Currency Sheet */}
-        <Sheet visible={currencySheet} onClose={() => setCurrencySheet(false)} height="60%">
-          <ScrollView contentContainerStyle={{ padding: SPACING.xl, paddingBottom: SPACING.huge }}>
-            <Text style={[TEXT_STYLES.h2, { marginBottom: SPACING.xl }]}>Currency</Text>
+        <Sheet visible={currencySheet} onClose={() => setCurrencySheet(false)}>
+          <SheetHeader title="Currency" onClose={() => setCurrencySheet(false)} />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: SPACING.huge }}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm }}>
               {CURRENCY_OPTIONS.map((c) => (
                 <Chip

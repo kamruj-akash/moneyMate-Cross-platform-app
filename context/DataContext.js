@@ -32,7 +32,7 @@ const DEFAULT_SETTINGS = {
 const nowISO = () => new Date().toISOString();
 
 export const DataProvider = ({ children }) => {
-  const { isAuthenticated, isOfflineMode, user, bootstrapping } = useAuth();
+  const { isAuthenticated, isOfflineMode, user, bootstrapping, restoring } = useAuth();
   const [transactions, setTransactions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [recurring, setRecurring] = useState([]);
@@ -59,10 +59,10 @@ export const DataProvider = ({ children }) => {
   }, []);
 
   // Single hydrate-and-sync effect: read local data, seed defaults if empty,
-  // then push to cloud. All sequential to avoid race conditions where a
-  // previous version could read empty before seed wrote, and never re-push.
+  // then push to cloud. Waits for `restoring` so we never read AsyncStorage
+  // mid-login (cleared local + cloud not yet pulled = false-empty seed).
   useEffect(() => {
-    if (bootstrapping) return;
+    if (bootstrapping || restoring) return;
     let mounted = true;
     (async () => {
       let [tx, cat, rec, set, qs, ls, online, pushedMap] = await Promise.all([
@@ -121,7 +121,7 @@ export const DataProvider = ({ children }) => {
       }
     })();
     return () => { mounted = false; };
-  }, [user?.id, isOfflineMode, bootstrapping]);
+  }, [user?.id, isOfflineMode, bootstrapping, restoring]);
 
   useEffect(() => {
     const unsub = subscribeSync(async (event) => {

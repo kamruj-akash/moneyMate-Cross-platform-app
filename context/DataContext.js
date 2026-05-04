@@ -77,7 +77,11 @@ export const DataProvider = ({ children }) => {
       ]);
 
       let cats = cat || [];
-      if (!cats || cats.length === 0) {
+      // Only seed default categories when there's a real owner (signed-in user
+      // or offline mode). Seeding while unauthed creates fresh UUIDs every
+      // logout/login cycle, which then duplicate to the cloud on next push.
+      const hasOwner = !!user?.id || isOfflineMode;
+      if (hasOwner && (!cats || cats.length === 0)) {
         cats = DEFAULT_CATEGORIES.map((c) => ({
           ...c,
           id: uuid(),

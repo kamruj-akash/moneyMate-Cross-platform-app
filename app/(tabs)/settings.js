@@ -45,6 +45,39 @@ export default function Settings() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
 
+  const [pwdSheet, setPwdSheet] = useState(false);
+  const [pwdNew, setPwdNew] = useState('');
+  const [pwdNew2, setPwdNew2] = useState('');
+  const [pwdSaving, setPwdSaving] = useState(false);
+
+  const changePassword = async () => {
+    if (pwdNew.length < 8) {
+      hError();
+      show('Password must be at least 8 characters', { variant: 'error' });
+      return;
+    }
+    if (pwdNew !== pwdNew2) {
+      hError();
+      show('Passwords do not match', { variant: 'error' });
+      return;
+    }
+    setPwdSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pwdNew });
+      if (error) throw error;
+      hSuccess();
+      show('Password updated', { variant: 'success', description: 'Use it next time you log in.' });
+      setPwdSheet(false);
+      setPwdNew('');
+      setPwdNew2('');
+    } catch (e) {
+      hError();
+      show('Could not change password', { variant: 'error', description: e?.message });
+    } finally {
+      setPwdSaving(false);
+    }
+  };
+
   const [profileSheet, setProfileSheet] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profileMobile, setProfileMobile] = useState('');
@@ -268,9 +301,14 @@ export default function Settings() {
               <Button title={syncing ? 'Syncing…' : 'Force sync now'} variant="outline" onPress={onForceSync} loading={syncing} />
 
               {user ? (
-                <Pressable onPress={onLogout} style={{ marginTop: SPACING.md, alignSelf: 'flex-start' }} hitSlop={10}>
-                  <Text style={{ color: COLORS.danger, fontFamily: FONT.medium, fontSize: 14 }}>Logout</Text>
-                </Pressable>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: SPACING.md }}>
+                  <Pressable onPress={() => setPwdSheet(true)} hitSlop={10}>
+                    <Text style={{ color: COLORS.primary, fontFamily: FONT.medium, fontSize: 14 }}>Change password</Text>
+                  </Pressable>
+                  <Pressable onPress={onLogout} hitSlop={10}>
+                    <Text style={{ color: COLORS.danger, fontFamily: FONT.medium, fontSize: 14 }}>Logout</Text>
+                  </Pressable>
+                </View>
               ) : (
                 <Pressable
                   onPress={async () => {
@@ -539,6 +577,44 @@ export default function Settings() {
               />
             )
           ) : null}
+        </Sheet>
+
+        {/* Change Password Sheet */}
+        <Sheet visible={pwdSheet} onClose={() => !pwdSaving && setPwdSheet(false)}>
+          <SheetHeader
+            title="Change password"
+            subtitle="Pick a new password for your account"
+            onClose={() => !pwdSaving && setPwdSheet(false)}
+          />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: SPACING.huge }} keyboardShouldPersistTaps="handled">
+            <Input
+              label="New password"
+              value={pwdNew}
+              onChangeText={setPwdNew}
+              placeholder="At least 8 characters"
+              secureTextEntry
+              variant="surface"
+              leftIcon="lock-closed-outline"
+              editable={!pwdSaving}
+            />
+            <Input
+              label="Confirm new password"
+              value={pwdNew2}
+              onChangeText={setPwdNew2}
+              placeholder="Re-enter password"
+              secureTextEntry
+              variant="surface"
+              leftIcon="lock-closed-outline"
+              editable={!pwdSaving}
+            />
+            <Button
+              title={pwdSaving ? 'Updating…' : 'Update password'}
+              onPress={changePassword}
+              loading={pwdSaving}
+              disabled={pwdSaving || !pwdNew || !pwdNew2}
+              style={{ marginTop: SPACING.md }}
+            />
+          </ScrollView>
         </Sheet>
 
         {/* Delete My Data Sheet */}

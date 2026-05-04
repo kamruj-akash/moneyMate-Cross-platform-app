@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "scheme": "moneymate",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A0A0F"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.akash.moneymate"
@@ -19,6 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundImage": "./assets/adaptive-icon-background.png",
         "backgroundColor": "#0A0A0F"
       },
       "package": "com.akash.moneymate",
@@ -39,6 +35,25 @@
     "plugins": [
       "expo-router",
       "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0A0F",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "android": {
+            "image": "./assets/splash-1080x1920.png",
+            "resizeMode": "cover",
+            "backgroundColor": "#0A0A0F"
+          },
+          "ios": {
+            "image": "./assets/splash-1284x2778.png",
+            "resizeMode": "cover",
+            "backgroundColor": "#0A0A0F"
+          }
+        }
+      ],
       [
         "expo-notifications",
         {

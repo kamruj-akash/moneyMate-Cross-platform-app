@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Share } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, Alert, Share, Modal, Platform } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,6 +44,35 @@ export default function Settings() {
   const [deleteSheet, setDeleteSheet] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  const [profileSheet, setProfileSheet] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileMobile, setProfileMobile] = useState('');
+  const [profileBirth, setProfileBirth] = useState(null);
+  const [profileBirthOpen, setProfileBirthOpen] = useState(false);
+
+  const openProfileSheet = () => {
+    setProfileName(settings.name || '');
+    setProfileMobile(settings.mobile_number || '');
+    setProfileBirth(settings.birth_date ? new Date(settings.birth_date) : null);
+    setProfileSheet(true);
+  };
+
+  const saveProfile = async () => {
+    try {
+      await updateSettings({
+        name: profileName.trim() || null,
+        mobile_number: profileMobile.trim() || null,
+        birth_date: profileBirth ? profileBirth.toISOString().slice(0, 10) : null,
+      });
+      hSuccess();
+      show('Profile saved', { variant: 'success' });
+      setProfileSheet(false);
+    } catch (e) {
+      hError();
+      show('Could not save profile', { variant: 'error', description: e?.message });
+    }
+  };
 
   const [syncing, setSyncing] = useState(false);
 
@@ -226,10 +256,10 @@ export default function Settings() {
                 </View>
                 <View style={{ flex: 1, marginLeft: SPACING.md }}>
                   <Text style={[TEXT_STYLES.h3]} numberOfLines={1}>
-                    {user?.email || 'Offline mode'}
+                    {settings.name || user?.email || 'Offline mode'}
                   </Text>
-                  <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 12, marginTop: 2 }}>
-                    {syncStatus.lastSync ? `Last synced ${fmt(syncStatus.lastSync, "h:mm a 'on' MMM d")}` : 'Never synced'}
+                  <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                    {settings.name && user?.email ? user.email : (syncStatus.lastSync ? `Last synced ${fmt(syncStatus.lastSync, "h:mm a 'on' MMM d")}` : 'Never synced')}
                   </Text>
                 </View>
                 <SyncIndicator compact />
@@ -256,6 +286,28 @@ export default function Settings() {
                 </Pressable>
               )}
             </View>
+          </Section>
+
+          {/* Profile */}
+          <Section title="Profile">
+            <Row
+              icon="person-outline"
+              label="Name"
+              value={settings.name || 'Not set'}
+              onPress={openProfileSheet}
+            />
+            <Row
+              icon="calendar-outline"
+              label="Birth date"
+              value={settings.birth_date ? fmt(settings.birth_date, 'MMM d, yyyy') : 'Not set'}
+              onPress={openProfileSheet}
+            />
+            <Row
+              icon="call-outline"
+              label="Mobile"
+              value={settings.mobile_number || 'Not set'}
+              onPress={openProfileSheet}
+            />
           </Section>
 
           {/* Budget */}
@@ -412,6 +464,83 @@ export default function Settings() {
           </ScrollView>
         </Sheet>
 
+        {/* Profile Sheet */}
+        <Sheet visible={profileSheet} onClose={() => setProfileSheet(false)}>
+          <SheetHeader
+            title="Edit profile"
+            subtitle="Personalize your account"
+            onClose={() => setProfileSheet(false)}
+          />
+          <ScrollView contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: SPACING.huge }} keyboardShouldPersistTaps="handled">
+            <Input
+              label="Name"
+              value={profileName}
+              onChangeText={setProfileName}
+              placeholder="Your full name"
+              variant="surface"
+              leftIcon="person-outline"
+              autoCapitalize="words"
+            />
+
+            <Pressable onPress={() => setProfileBirthOpen(true)} style={styles.profileRow}>
+              <View style={styles.profileRowLeft}>
+                <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} />
+                <View style={{ marginLeft: SPACING.sm }}>
+                  <Text style={[TEXT_STYLES.label, { marginBottom: 2 }]}>Birth date</Text>
+                  <Text style={{ color: profileBirth ? COLORS.textPrimary : COLORS.textMuted, fontFamily: FONT.medium, fontSize: 15 }}>
+                    {profileBirth ? fmt(profileBirth, 'MMM d, yyyy') : 'Tap to pick'}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.textMuted} />
+            </Pressable>
+
+            <Input
+              label="Mobile number"
+              value={profileMobile}
+              onChangeText={setProfileMobile}
+              placeholder="+880 1XXX XXXXXX"
+              variant="surface"
+              leftIcon="call-outline"
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+            />
+
+            <Button title="Save profile" onPress={saveProfile} style={{ marginTop: SPACING.md }} />
+          </ScrollView>
+
+          {profileBirthOpen ? (
+            Platform.OS === 'ios' ? (
+              <Modal transparent animationType="fade" visible onRequestClose={() => setProfileBirthOpen(false)}>
+                <Pressable style={styles.dpBackdrop} onPress={() => setProfileBirthOpen(false)} />
+                <View style={styles.dpIosWrap}>
+                  <DateTimePicker
+                    value={profileBirth || new Date(2000, 0, 1)}
+                    mode="date"
+                    display="spinner"
+                    maximumDate={new Date()}
+                    onChange={(_, d) => d && setProfileBirth(d)}
+                    themeVariant="dark"
+                    textColor={COLORS.textPrimary}
+                  />
+                  <Button title="Done" onPress={() => setProfileBirthOpen(false)} style={{ margin: SPACING.lg }} />
+                </View>
+              </Modal>
+            ) : (
+              <DateTimePicker
+                value={profileBirth || new Date(2000, 0, 1)}
+                mode="date"
+                display="default"
+                maximumDate={new Date()}
+                onChange={(event, d) => {
+                  setProfileBirthOpen(false);
+                  if (event.type === 'set' && d) setProfileBirth(d);
+                }}
+              />
+            )
+          ) : null}
+        </Sheet>
+
         {/* Delete My Data Sheet */}
         <Sheet visible={deleteSheet} onClose={() => !deleting && setDeleteSheet(false)}>
           <SheetHeader title="Delete my data" onClose={() => !deleting && setDeleteSheet(false)} />
@@ -558,5 +687,30 @@ const styles = StyleSheet.create({
   recIcon: {
     width: 40, height: 40, borderRadius: 20,
     alignItems: 'center', justifyContent: 'center',
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 14,
+    marginBottom: SPACING.lg,
+  },
+  profileRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dpBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: COLORS.overlay },
+  dpIosWrap: {
+    position: 'absolute',
+    bottom: 0, left: 0, right: 0,
+    backgroundColor: COLORS.surfaceElevated,
+    borderTopLeftRadius: RADIUS.xxl,
+    borderTopRightRadius: RADIUS.xxl,
+    paddingTop: SPACING.lg,
   },
 });

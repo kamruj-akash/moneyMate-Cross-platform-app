@@ -27,7 +27,8 @@ export default function Dashboard() {
       .slice(0, 5);
   }, [transactions]);
 
-  const userName = user?.email?.split('@')?.[0] || (isOfflineMode ? 'Offline' : 'You');
+  const profileName = settings.name?.trim();
+  const userName = profileName || user?.email?.split('@')?.[0] || (isOfflineMode ? 'Offline' : 'You');
 
   const onRefresh = async () => {
     setRefreshing(true);

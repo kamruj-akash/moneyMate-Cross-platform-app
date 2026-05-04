@@ -23,6 +23,9 @@ const DEFAULT_SETTINGS = {
   monthly_budget: 0,
   alert_threshold: 80,
   notifications_enabled: true,
+  name: null,
+  birth_date: null,
+  mobile_number: null,
   updated_at: new Date().toISOString(),
 };
 

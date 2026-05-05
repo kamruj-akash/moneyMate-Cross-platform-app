@@ -14,14 +14,36 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let mounted = true;
+    // Hard ceiling on the bootstrap wait. If AsyncStorage or the Supabase
+    // session lock hangs after the user clears app data, the spinner would
+    // otherwise stick forever and the user would never reach the welcome
+    // screen. Better to fall through with no session and let the gate route
+    // them to welcome.
+    const BOOT_TIMEOUT_MS = 4000;
+
+    const withTimeout = (promise, fallback) =>
+      Promise.race([
+        promise.catch(() => fallback),
+        new Promise((resolve) => setTimeout(() => resolve(fallback), BOOT_TIMEOUT_MS)),
+      ]);
+
     (async () => {
       try {
-        const offline = (await getJSON(KEYS.OFFLINE_MODE, false)) === true;
+        const offline = (await withTimeout(getJSON(KEYS.OFFLINE_MODE, false), false)) === true;
         if (mounted) setIsOfflineMode(offline);
-        const { data } = await supabase.auth.getSession();
+
+        const { data } = await withTimeout(
+          supabase.auth.getSession(),
+          { data: { session: null } }
+        );
         if (mounted) {
           setSession(data?.session || null);
           setUser(data?.session?.user || null);
+        }
+      } catch {
+        if (mounted) {
+          setSession(null);
+          setUser(null);
         }
       } finally {
         if (mounted) setBootstrapping(false);
@@ -69,7 +91,21 @@ export const AuthProvider = ({ children }) => {
       }
       if (newUserId) await setJSON(KEYS.LAST_USER_ID, newUserId);
 
-      await fullSync();
+      // Cap the post-login sync. Flaky networks were trapping users on the
+      // "Restoring your data…" loader forever. fullSync continues in the
+      // background via auto-sync; we just don't block the login UX on it.
+      const FULL_SYNC_TIMEOUT_MS = 10000;
+      try {
+        await Promise.race([
+          fullSync(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('sync_timeout')), FULL_SYNC_TIMEOUT_MS)),
+        ]);
+      } catch {
+        // ignore — auto-sync will retry
+      }
+
+      // Always reset offline-mode flag, even if the sync above timed out or
+      // the user is on a flaky network. They've successfully signed in.
       await remove(KEYS.OFFLINE_MODE);
       setIsOfflineMode(false);
       return { ok: true, data };
@@ -81,9 +117,14 @@ export const AuthProvider = ({ children }) => {
   const signOut = useCallback(async () => {
     try { await supabase.auth.signOut(); } catch {}
     // Clear local cache so the next login starts fresh from cloud and we
-    // never mix data across accounts.
+    // never mix data across accounts. Also drop the OFFLINE_MODE flag so the
+    // post-sign-out state is unambiguous — without this, a stale flag from a
+    // previous session could keep the gate redirecting to /(tabs) and trap
+    // the user on a half-empty dashboard.
     await clearLocalDataTables();
     await remove(KEYS.LAST_USER_ID);
+    await remove(KEYS.OFFLINE_MODE);
+    setIsOfflineMode(false);
     setSession(null);
     setUser(null);
   }, []);

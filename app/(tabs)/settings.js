@@ -455,7 +455,7 @@ export default function Settings() {
               value={settings.currency || 'BDT'}
               onPress={() => setCurrencySheet(true)}
             />
-            <Row icon="information-circle-outline" label="App version" value="1.1.0" />
+            <Row icon="information-circle-outline" label="App version" value="1.1.1" />
           </Section>
 
           {/* Danger */}

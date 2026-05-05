@@ -2,14 +2,15 @@
   "expo": {
     "name": "MoneyMate",
     "slug": "moneymate",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "moneymate",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.akash.moneymate"
+      "bundleIdentifier": "com.akash.moneymate",
+      "buildNumber": "1.1.1"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,6 +19,7 @@
         "backgroundColor": "#0A0A0F"
       },
       "package": "com.akash.moneymate",
+      "versionCode": 3,
       "navigationBar": {
         "backgroundColor": "#0A0A0F",
         "barStyle": "light-content"
@@ -43,12 +45,12 @@
           "imageWidth": 220,
           "resizeMode": "contain",
           "android": {
-            "image": "./assets/splash-1080x1920.png",
+            "image": "./assets/splash-icon.png",
             "resizeMode": "cover",
             "backgroundColor": "#0A0A0F"
           },
           "ios": {
-            "image": "./assets/splash-1284x2778.png",
+            "image": "./assets/splash-icon.png",
             "resizeMode": "cover",
             "backgroundColor": "#0A0A0F"
           }

@@ -26,6 +26,8 @@ import { CURRENCY_OPTIONS, formatAmount } from '../../utils/currency';
 import { exportBackupJSON, exportTransactionsPDF } from '../../lib/export';
 import { fmt } from '../../utils/date';
 import { hSuccess, hError } from '../../utils/haptics';
+import { checkForUpdate, startUpdateDownload, getCurrentVersion } from '../../lib/updates';
+import UpdateModal from '../../components/UpdateModal';
 
 export default function Settings() {
   const router = useRouter();
@@ -102,6 +104,59 @@ export default function Settings() {
   const [profileMobile, setProfileMobile] = useState('');
   const [profileBirth, setProfileBirth] = useState(null);
   const [profileBirthOpen, setProfileBirthOpen] = useState(false);
+
+  // In-app update check (queries public.app_versions in Supabase, compares
+  // against the running app's version, opens the GitHub APK URL if newer).
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [updateDownloading, setUpdateDownloading] = useState(false);
+
+  const onCheckUpdate = async () => {
+    if (updateChecking) return;
+    setUpdateChecking(true);
+    try {
+      const info = await checkForUpdate();
+      setUpdateInfo(info);
+      if (info.hasUpdate) {
+        hSuccess();
+        setUpdateModalOpen(true);
+      } else {
+        hSuccess();
+        show("You're on the latest version", {
+          variant: 'success',
+          description: `v${info.current}`,
+        });
+      }
+    } catch (e) {
+      hError();
+      show('Could not check for updates', { variant: 'error', description: e?.message });
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
+  const onStartUpdate = async () => {
+    if (!updateInfo?.apkUrl) {
+      hError();
+      show('Download URL is missing', {
+        variant: 'error',
+        description: 'Set apk_url in app_versions and try again.',
+      });
+      return;
+    }
+    setUpdateDownloading(true);
+    try {
+      await startUpdateDownload(updateInfo.apkUrl);
+      // Don't close the modal — user might switch back to the app while the
+      // browser downloads. Tapping "Later" still works.
+    } catch (e) {
+      hError();
+      show('Could not open the download', { variant: 'error', description: e?.message });
+    } finally {
+      setUpdateDownloading(false);
+    }
+  };
 
   const openProfileSheet = () => {
     setProfileName(settings.name || '');
@@ -455,7 +510,12 @@ export default function Settings() {
               value={settings.currency || 'BDT'}
               onPress={() => setCurrencySheet(true)}
             />
-            <Row icon="information-circle-outline" label="App version" value="1.1.1" />
+            <Row
+              icon="cloud-download-outline"
+              label={updateChecking ? 'Checking…' : 'Check for updates'}
+              value={`v${getCurrentVersion()}`}
+              onPress={onCheckUpdate}
+            />
           </Section>
 
           {/* Danger */}
@@ -847,6 +907,17 @@ export default function Settings() {
             />
           </ScrollView>
         </Sheet>
+
+        <UpdateModal
+          visible={updateModalOpen}
+          current={updateInfo?.current}
+          latest={updateInfo?.latest}
+          releaseNotes={updateInfo?.releaseNotes}
+          mandatory={updateInfo?.mandatory}
+          downloading={updateDownloading}
+          onUpdate={onStartUpdate}
+          onClose={() => setUpdateModalOpen(false)}
+        />
       </SafeAreaView>
     </GradientBackground>
   );

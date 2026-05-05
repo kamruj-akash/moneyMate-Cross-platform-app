@@ -43,12 +43,12 @@
           "imageWidth": 220,
           "resizeMode": "contain",
           "android": {
-            "image": "./assets/splash-1080x1920.png",
+            "image": "./assets/splash-icon.png",
             "resizeMode": "cover",
             "backgroundColor": "#0A0A0F"
           },
           "ios": {
-            "image": "./assets/splash-1284x2778.png",
+            "image": "./assets/splash-icon.png",
             "resizeMode": "cover",
             "backgroundColor": "#0A0A0F"
           }

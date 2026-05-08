@@ -10,6 +10,7 @@ import { COLORS } from '../constants/theme';
 import { AuthProvider } from '../context/AuthContext';
 import { DataProvider } from '../context/DataContext';
 import { ToastProvider } from '../components/ui/Toast';
+import { ensureFirstLaunchPermission } from '../lib/notifications';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -34,6 +35,17 @@ export default function RootLayout() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded]);
+
+  // Ask for notification permission once on first launch. Slight delay so
+  // the welcome / dashboard screen renders first — the system dialog then
+  // appears on top, which feels less abrupt than firing during the splash.
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => {
+      ensureFirstLaunchPermission().catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [ready]);
 
   if (!ready) {
     return (

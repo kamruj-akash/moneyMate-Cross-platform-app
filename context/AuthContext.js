@@ -89,6 +89,39 @@ export const AuthProvider = ({ children }) => {
       if (newUserId && lastUserId && lastUserId !== newUserId) {
         await clearLocalDataTables();
       }
+
+      // Profile-duplication guard: when transitioning from offline mode (or
+      // a fresh install) to logged-in, the local cache may already hold a
+      // "Personal" profile that DataContext seeded during offline use. If
+      // the cloud account already has profiles, blindly pushing the local
+      // one creates a duplicate side-by-side with the cloud's existing
+      // default. So: peek at cloud first; if profiles exist there, drop
+      // local data and let pullFromCloud rehydrate from the canonical set.
+      if (newUserId) {
+        try {
+          const { data: cloudProfiles } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', newUserId);
+
+          if (cloudProfiles && cloudProfiles.length > 0) {
+            // Cloud is the source of truth. Wipe local (offline-seeded)
+            // tables so DataContext won't seed defaults again.
+            await clearLocalDataTables();
+            await setJSON(KEYS.PROFILES, cloudProfiles);
+            // Mark this user as already cloud-pushed so the DataContext
+            // push gate doesn't try to re-upload the now-empty local set.
+            const pushedMap = (await getJSON(KEYS.CLOUD_PUSHED, {})) || {};
+            pushedMap[newUserId] = true;
+            await setJSON(KEYS.CLOUD_PUSHED, pushedMap);
+          }
+        } catch {
+          // Network hiccup — fall through. fullSync below will still try
+          // to reconcile, and the worst case is the legacy duplicate
+          // behaviour (no regression vs. before this guard).
+        }
+      }
+
       if (newUserId) await setJSON(KEYS.LAST_USER_ID, newUserId);
 
       // Cap the post-login sync. Flaky networks were trapping users on the

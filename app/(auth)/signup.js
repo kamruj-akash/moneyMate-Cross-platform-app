@@ -28,15 +28,21 @@ export default function SignUp() {
   const { show } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const strength = useMemo(() => evalStrength(password), [password]);
+  // Mismatch warning is only shown once the user has typed in the
+  // confirmation field, so they don't see "Passwords do not match" while
+  // they're still typing the first password.
+  const mismatch = password2.length > 0 && password !== password2;
 
   const onSubmit = async () => {
     setError(null);
     if (!email.includes('@')) return setError('Enter a valid email');
     if (password.length < 8) return setError('Password must be at least 8 characters');
+    if (password !== password2) return setError('Passwords do not match');
     setLoading(true);
     const r = await signUp(email.trim(), password);
     setLoading(false);
@@ -46,7 +52,7 @@ export default function SignUp() {
       return;
     }
     hSuccess();
-    show('Check your email for confirmation', { variant: 'success' });
+    show('We emailed you a 6-digit code', { variant: 'success' });
     router.replace({ pathname: '/(auth)/verify', params: { email: email.trim() } });
   };
 
@@ -89,6 +95,20 @@ export default function SignUp() {
                 variant="surface"
               />
               <StrengthBar strength={strength} pwLength={password.length} />
+              <Input
+                label="Confirm password"
+                value={password2}
+                onChangeText={setPassword2}
+                placeholder="Re-enter your password"
+                secureTextEntry
+                leftIcon="lock-closed-outline"
+                variant="surface"
+              />
+              {mismatch ? (
+                <Text style={{ color: COLORS.danger, fontFamily: FONT.medium, fontSize: 13, marginTop: -SPACING.sm, marginBottom: SPACING.md }}>
+                  Passwords do not match
+                </Text>
+              ) : null}
               {error ? (
                 <Text style={{ color: COLORS.danger, fontFamily: FONT.medium, fontSize: 13, marginTop: SPACING.sm }}>
                   {error}
@@ -99,7 +119,7 @@ export default function SignUp() {
                 title="Create Account"
                 onPress={onSubmit}
                 loading={loading}
-                disabled={!email || !password}
+                disabled={!email || !password || !password2 || mismatch}
                 style={{ marginTop: SPACING.xl }}
               />
 

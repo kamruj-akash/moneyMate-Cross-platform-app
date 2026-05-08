@@ -32,27 +32,61 @@ export const AuthProvider = ({ children }) => {
         const offline = (await withTimeout(getJSON(KEYS.OFFLINE_MODE, false), false)) === true;
         if (mounted) setIsOfflineMode(offline);
 
+        // Restore the cached auth user FIRST. Supabase will clear its own
+        // session when a refresh fails (e.g. user opens the app after weeks
+        // offline, refresh token still valid but no network), and we don't
+        // want that to look like a logout. AUTH_USER is our shadow identity
+        // — only an explicit signOut() call removes it.
+        const cachedUser = await withTimeout(getJSON(KEYS.AUTH_USER, null), null);
+        if (mounted && cachedUser) {
+          setUser(cachedUser);
+        }
+
         const { data } = await withTimeout(
           supabase.auth.getSession(),
           { data: { session: null } }
         );
         if (mounted) {
           setSession(data?.session || null);
-          setUser(data?.session?.user || null);
+          if (data?.session?.user) {
+            // Real session — overlay the user info and refresh the cache so
+            // it stays in sync with the latest server-provided fields.
+            setUser(data.session.user);
+            setJSON(KEYS.AUTH_USER, {
+              id: data.session.user.id,
+              email: data.session.user.email,
+            }).catch(() => {});
+          }
+          // If getSession returned null but we already restored from cache
+          // above, leave `user` set. Sync stays paused (gated on `session`)
+          // until the network returns and supabase emits SIGNED_IN.
         }
       } catch {
-        if (mounted) {
-          setSession(null);
-          setUser(null);
-        }
+        // Fall through; bootstrapping ends in finally.
       } finally {
         if (mounted) setBootstrapping(false);
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess || null);
-      setUser(sess?.user || null);
+    const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
+      // Real session present — adopt it, refresh cache.
+      if (sess) {
+        setSession(sess);
+        setUser(sess.user || null);
+        if (sess.user) {
+          setJSON(KEYS.AUTH_USER, { id: sess.user.id, email: sess.user.email }).catch(() => {});
+        }
+        return;
+      }
+      // No session. Drop session state but DO NOT clear `user` yet —
+      // supabase fires SIGNED_OUT both for explicit logouts and for
+      // automatic refresh failures (e.g. offline). Re-check the cache:
+      // if AUTH_USER was removed, the user explicitly signed out, so
+      // mirror that. Otherwise keep the shadow user.
+      setSession(null);
+      getJSON(KEYS.AUTH_USER, null).then((cached) => {
+        if (!cached) setUser(null);
+      }).catch(() => {});
     });
 
     startAutoSync();
@@ -141,6 +175,15 @@ export const AuthProvider = ({ children }) => {
       // the user is on a flaky network. They've successfully signed in.
       await remove(KEYS.OFFLINE_MODE);
       setIsOfflineMode(false);
+
+      // Persist minimal user info so the UI stays "logged in" even if the
+      // session is later cleared due to an offline refresh failure.
+      if (data?.session?.user) {
+        await setJSON(KEYS.AUTH_USER, {
+          id: data.session.user.id,
+          email: data.session.user.email,
+        });
+      }
       return { ok: true, data };
     } finally {
       setRestoring(false);
@@ -148,6 +191,11 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Drop AUTH_USER FIRST so the onAuthStateChange listener (which fires
+    // synchronously when supabase signs out) can tell this is an explicit
+    // logout rather than a refresh failure, and won't preserve the shadow
+    // user state.
+    await remove(KEYS.AUTH_USER);
     try { await supabase.auth.signOut(); } catch {}
     // Clear local cache so the next login starts fresh from cloud and we
     // never mix data across accounts. Also drop the OFFLINE_MODE flag so the

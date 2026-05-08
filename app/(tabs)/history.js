@@ -38,13 +38,13 @@ export default function History() {
     } else if (filter === 'this_month') {
       const { start, end } = monthRange(new Date());
       list = list.filter((t) => {
-        const d = safeParse(t.date);
+        const d = safeParse(t.created_at || t.date);
         return d >= start && d <= end;
       });
     } else if (filter === 'last_month') {
       const { start, end } = monthRange(subMonths(new Date(), 1));
       list = list.filter((t) => {
-        const d = safeParse(t.date);
+        const d = safeParse(t.created_at || t.date);
         return d >= start && d <= end;
       });
     }
@@ -59,7 +59,7 @@ export default function History() {
         );
       });
     }
-    list.sort((a, b) => new Date(b.date) - new Date(a.date));
+    list.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date));
     return list;
   }, [transactions, categories, filter, query]);
 
@@ -67,7 +67,7 @@ export default function History() {
   const sections = useMemo(() => {
     const map = new Map();
     for (const t of filtered) {
-      const key = fmtRelative(t.date);
+      const key = fmtRelative(t.created_at || t.date);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(t);
     }

@@ -48,7 +48,7 @@ export default function AddTransaction() {
   const [title, setTitle] = useState(existing?.title || '');
   const [note, setNote] = useState(existing?.note || '');
   const [categoryId, setCategoryId] = useState(existing?.category_id || null);
-  const [date, setDate] = useState(existing ? new Date(existing.date) : new Date());
+  const [date, setDate] = useState(existing ? new Date(existing.created_at || existing.date) : new Date());
   const [showDate, setShowDate] = useState(false);
   const [recurring, setRecurring] = useState(false);
   const [frequency, setFrequency] = useState('monthly');
@@ -81,7 +81,7 @@ export default function AddTransaction() {
           title,
           note,
           category_id: categoryId,
-          date: date.toISOString(),
+          created_at: date.toISOString(),
         });
         hSuccess();
         show('Transaction updated', { variant: 'success' });
@@ -92,7 +92,7 @@ export default function AddTransaction() {
           title,
           note,
           category_id: categoryId,
-          date: date.toISOString(),
+          created_at: date.toISOString(),
         });
         if (recurring) {
           await addRecurring({

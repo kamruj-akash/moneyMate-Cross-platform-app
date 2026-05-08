@@ -40,7 +40,7 @@ export default function Dashboard() {
   const stats = useMemo(() => getMonthlyStats(new Date()), [getMonthlyStats]);
   const recent = useMemo(() => {
     return [...transactions]
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date))
       .slice(0, 5);
   }, [transactions]);
 

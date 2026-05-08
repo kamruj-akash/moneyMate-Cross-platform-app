@@ -195,6 +195,10 @@ export const DataProvider = ({ children }) => {
   // ---------- Transactions ----------
   const addTransaction = useCallback(
     async (input) => {
+      // We collapsed `date` (user-pickable) and `created_at` (audit) into
+      // a single `created_at` field. The picker writes through to
+      // created_at directly so back-dating still works, just without the
+      // redundant column.
       const item = {
         id: uuid(),
         type: input.type,
@@ -203,9 +207,8 @@ export const DataProvider = ({ children }) => {
         note: input.note || null,
         category_id: input.category_id || null,
         profile_id: input.profile_id || activeProfileId || null,
-        date: input.date || nowISO(),
         recurring_id: input.recurring_id || null,
-        created_at: nowISO(),
+        created_at: input.created_at || input.date || nowISO(),
         updated_at: nowISO(),
       };
       const next = [item, ...transactions];
@@ -221,7 +224,7 @@ export const DataProvider = ({ children }) => {
           .filter((t) =>
             t.type === 'expense' &&
             (!t.profile_id || t.profile_id === activeProfileId) &&
-            safeParse(t.date) >= start && safeParse(t.date) <= end
+            safeParse(t.created_at || t.date) >= start && safeParse(t.created_at || t.date) <= end
           )
           .reduce((s, t) => s + Number(t.amount), 0);
         if (settings.notifications_enabled !== false && activeProfile) {
@@ -532,7 +535,7 @@ export const DataProvider = ({ children }) => {
     (month = new Date()) => {
       const { start, end } = monthRange(month);
       const inMonth = scopedTransactions.filter((t) => {
-        const d = safeParse(t.date);
+        const d = safeParse(t.created_at || t.date);
         return d >= start && d <= end;
       });
       const income = inMonth.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
@@ -561,7 +564,7 @@ export const DataProvider = ({ children }) => {
       for (let i = 1; i <= days; i++) {
         const d = new Date(start.getFullYear(), start.getMonth(), i);
         const total = inMonth
-          .filter((t) => t.type === 'expense' && safeParse(t.date).getDate() === i)
+          .filter((t) => t.type === 'expense' && safeParse(t.created_at || t.date).getDate() === i)
           .reduce((s, t) => s + Number(t.amount), 0);
         dailyTrend.push({ day: i, label: format(d, 'd'), value: total });
       }
@@ -578,7 +581,7 @@ export const DataProvider = ({ children }) => {
         const d = new Date(ref.getFullYear(), ref.getMonth() - i, 1);
         const { start, end } = monthRange(d);
         const inMonth = scopedTransactions.filter((t) => {
-          const dt = safeParse(t.date);
+          const dt = safeParse(t.created_at || t.date);
           return dt >= start && dt <= end;
         });
         const income = inMonth.filter((t) => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);

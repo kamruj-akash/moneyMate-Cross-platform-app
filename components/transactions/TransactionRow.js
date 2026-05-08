@@ -29,7 +29,7 @@ const TransactionRow = ({ tx, category, currency = 'BDT', onPress, style }) => {
             {tx.title || (tx.type === 'income' ? 'Income' : 'Expense')}
           </Text>
           <Text style={styles.sub} numberOfLines={1}>
-            {(category?.name || (tx.type === 'income' ? 'Income' : 'Expense'))} · {fmtTime(tx.date)}
+            {(category?.name || (tx.type === 'income' ? 'Income' : 'Expense'))} · {fmtTime(tx.created_at || tx.date)}
           </Text>
         </View>
         <Text

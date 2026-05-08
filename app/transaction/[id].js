@@ -99,8 +99,8 @@ export default function TransactionDetail() {
           <View style={{ paddingHorizontal: SPACING.xl, marginTop: SPACING.xl }}>
             <View style={styles.detailCard}>
               <DetailRow icon="pricetag-outline" label="Category" value={cat?.name || 'Uncategorized'} />
-              <DetailRow icon="calendar-outline" label="Date" value={fmt(tx.date, 'EEEE, MMM d, yyyy')} />
-              <DetailRow icon="time-outline" label="Time" value={fmtTime(tx.date)} />
+              <DetailRow icon="calendar-outline" label="Date" value={fmt(tx.created_at || tx.date, 'EEEE, MMM d, yyyy')} />
+              <DetailRow icon="time-outline" label="Time" value={fmtTime(tx.created_at || tx.date)} />
               {tx.note ? <DetailRow icon="document-text-outline" label="Note" value={tx.note} /> : null}
               {tx.recurring_id ? <DetailRow icon="repeat-outline" label="Source" value="Recurring" /> : null}
             </View>

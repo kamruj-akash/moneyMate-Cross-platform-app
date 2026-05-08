@@ -24,10 +24,10 @@ create policy "anyone reads app_versions"
 insert into public.app_versions (platform, version_name, version_code, apk_url, release_notes, mandatory)
 values (
   'android',
-  '1.2.0',
-  4,
-  'https://github.com/kamruj-akash/moneyMate-Cross-platform-app/releases/download/v1.2.0/app-release.apk',
-  E'• In-app update checker (Settings → Check for updates)\n• Profile quick-switcher on Home\n• Account deletion via Supabase RPC\n• Transaction time no longer resets to 12:00 AM after sync\n• Fix for stuck loading after clearing app data\n• New splash + adaptive icon assets',
+  '1.3.0',
+  5,
+  'https://github.com/kamruj-akash/moneyMate-Cross-platform-app/releases/download/v1.3.0/app-release.apk',
+  E'• Email OTP verification on sign-up + password confirmation field\n• Stay logged in even after long offline gaps (no more sudden "Offline mode")\n• Save backup directly to your phone (Settings → Save backup to device)\n• Notification permission asked on first launch\n• Fixed duplicate "Personal" profile after offline → login\n• Schema cleanup: redundant `date` column retired in favour of `created_at`',
   false
 )
 on conflict (platform) do update

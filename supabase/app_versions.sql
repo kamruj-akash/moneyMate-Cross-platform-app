@@ -24,10 +24,10 @@ create policy "anyone reads app_versions"
 insert into public.app_versions (platform, version_name, version_code, apk_url, release_notes, mandatory)
 values (
   'android',
-  '1.3.0',
-  5,
-  'https://github.com/kamruj-akash/moneyMate-Cross-platform-app/releases/download/v1.3.0/app-release.apk',
-  E'• Email OTP verification on sign-up + password confirmation field\n• Stay logged in even after long offline gaps (no more sudden "Offline mode")\n• Save backup directly to your phone (Settings → Save backup to device)\n• Notification permission asked on first launch\n• Fixed duplicate "Personal" profile after offline → login\n• Schema cleanup: redundant `date` column retired in favour of `created_at`',
+  '1.4.0',
+  6,
+  'https://github.com/kamruj-akash/moneyMate-Cross-platform-app/releases/download/v1.4.0/app-release.apk',
+  E'• New "Expense Tracking" profile mode — track only what you spend, no income\n• Unified profile switcher on Home + Settings (switch, edit, create — all in one place)\n• 60% smaller download (~95MB → ~35MB) with per-architecture APK splits\n• Dropped unused libraries to slim the bundle further',
   false
 )
 on conflict (platform) do update

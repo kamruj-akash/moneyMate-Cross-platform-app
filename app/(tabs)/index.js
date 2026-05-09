@@ -118,6 +118,8 @@ export default function Dashboard() {
               income={stats.income}
               expense={stats.expense}
               currency={settings.currency}
+              mode={activeProfile?.mode || 'salary'}
+              count={stats.count}
             />
           </View>
 

@@ -74,7 +74,8 @@
             "extraProguardRules": "-keep class com.facebook.hermes.unicode.** { *; }\n-keep class com.facebook.jni.** { *; }"
           }
         }
-      ]
+      ],
+      "./plugins/with-abi-splits.js"
     ],
     "experiments": {
       "typedRoutes": false

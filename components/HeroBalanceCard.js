@@ -7,8 +7,16 @@ import { fmtMonth } from '../utils/date';
 import { formatAmount } from '../utils/currency';
 import AnimatedNumber from './AnimatedNumber';
 
-const HeroBalanceCard = ({ income = 0, expense = 0, currency = 'BDT', month = new Date() }) => {
+const HeroBalanceCard = ({
+  income = 0,
+  expense = 0,
+  currency = 'BDT',
+  month = new Date(),
+  mode = 'salary',
+  count = 0,
+}) => {
   const net = income - expense;
+  const expenseOnly = mode === 'expense_only';
   return (
     <View style={[styles.shadowWrap, SHADOWS.glow]}>
       <LinearGradient
@@ -18,26 +26,33 @@ const HeroBalanceCard = ({ income = 0, expense = 0, currency = 'BDT', month = ne
         style={styles.card}
       >
         <View style={styles.topRow}>
-          <Text style={styles.label}>Net Balance</Text>
+          <Text style={styles.label}>{expenseOnly ? 'Spent this month' : 'Net Balance'}</Text>
           <View style={styles.monthPill}>
             <Text style={styles.monthText}>{fmtMonth(month)}</Text>
           </View>
         </View>
 
         <AnimatedNumber
-          value={net}
+          value={expenseOnly ? expense : net}
           currency={currency}
           style={[styles.balance]}
         />
-        <Text style={styles.subtitle}>This month's overview</Text>
+        <Text style={styles.subtitle}>
+          {expenseOnly
+            ? `${count} ${count === 1 ? 'transaction' : 'transactions'} this month`
+            : "This month's overview"}
+        </Text>
 
-        <View style={styles.divider} />
-
-        <View style={styles.statsRow}>
-          <Stat icon="arrow-up" label="Income" value={income} currency={currency} positive />
-          <View style={styles.vDivider} />
-          <Stat icon="arrow-down" label="Expense" value={expense} currency={currency} />
-        </View>
+        {expenseOnly ? null : (
+          <>
+            <View style={styles.divider} />
+            <View style={styles.statsRow}>
+              <Stat icon="arrow-up" label="Income" value={income} currency={currency} positive />
+              <View style={styles.vDivider} />
+              <Stat icon="arrow-down" label="Expense" value={expense} currency={currency} />
+            </View>
+          </>
+        )}
       </LinearGradient>
     </View>
   );

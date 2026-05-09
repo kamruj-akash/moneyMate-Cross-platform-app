@@ -40,6 +40,10 @@ const DEFAULT_PROFILE = (userId) => ({
   monthly_budget: 0,
   alert_threshold: 80,
   is_default: true,
+  // 'salary' = full income + expense + budget view (legacy default).
+  // 'expense_only' = simplified mode for users who just want to track
+  // what they spend each month — no income, no net balance.
+  mode: 'salary',
   created_at: nowISO(),
   updated_at: nowISO(),
 });

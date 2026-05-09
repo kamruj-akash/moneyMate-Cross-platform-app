@@ -25,10 +25,28 @@
 
 const { withAppBuildGradle } = require('@expo/config-plugins');
 
+// `enable` is conditional on the gradle task name. If we're building an
+// AAB (`bundleRelease`), per-ABI splits collide with the R8 resource
+// shrinker because the bundle pipeline expects exactly one shrunk-
+// resources file but the splits produce three (one per arch + universal).
+// See https://issuetracker.google.com/402800800.
+//
+// Play Store does its own per-architecture splitting from the AAB anyway,
+// so disabling splits during bundleRelease costs us nothing — the AAB
+// still ends up serving ~35 MB per device. Splits only matter for the
+// stand-alone APKs we ship via GitHub releases.
+//
+// IMPORTANT: run `assembleRelease` and `bundleRelease` as SEPARATE gradle
+// invocations. If both are in one task list (`assembleRelease bundleRelease`)
+// the conditional below sees "bundle" and disables splits for the whole
+// build, which means the APKs you produce will be the fat universal one.
 const SPLITS_BLOCK = `
     splits {
         abi {
-            enable true
+            def buildingBundle = gradle.startParameter.taskNames.any {
+                it.toLowerCase().contains('bundle')
+            }
+            enable !buildingBundle
             reset()
             include 'arm64-v8a', 'armeabi-v7a'
             universalApk true

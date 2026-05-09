@@ -39,11 +39,15 @@ export default function AddTransaction() {
     updateTransaction,
     addRecurring,
     transactions,
+    activeProfile,
   } = useData();
   const { show } = useToast();
 
+  // Expense-tracking-only profiles never log income — the segmented
+  // control is hidden and the type is locked to 'expense' below.
+  const expenseOnly = activeProfile?.mode === 'expense_only';
   const existing = useMemo(() => transactions.find((t) => t.id === id), [transactions, id]);
-  const [type, setType] = useState(existing?.type || 'expense');
+  const [type, setType] = useState(expenseOnly ? 'expense' : (existing?.type || 'expense'));
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '');
   const [title, setTitle] = useState(existing?.title || '');
   const [note, setNote] = useState(existing?.note || '');
@@ -137,15 +141,17 @@ export default function AddTransaction() {
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.body}>
-              <SegmentedControl
-                options={[
-                  { value: 'expense', label: 'Expense' },
-                  { value: 'income', label: 'Income' },
-                ]}
-                value={type}
-                onChange={(v) => { hSelection(); setType(v); }}
-                accent={type === 'income' ? COLORS.income : COLORS.expense}
-              />
+              {expenseOnly ? null : (
+                <SegmentedControl
+                  options={[
+                    { value: 'expense', label: 'Expense' },
+                    { value: 'income', label: 'Income' },
+                  ]}
+                  value={type}
+                  onChange={(v) => { hSelection(); setType(v); }}
+                  accent={type === 'income' ? COLORS.income : COLORS.expense}
+                />
+              )}
 
               <View style={styles.amountWrap}>
                 <Text style={styles.amountPrefix}>{getCurrencySymbol(settings.currency)}</Text>

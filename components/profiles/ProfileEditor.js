@@ -32,6 +32,10 @@ const ProfileEditor = ({ visible, onClose, initial, onSave, onDelete }) => {
   const [color, setColor] = useState('#7F5AF0');
   const [budget, setBudget] = useState('');
   const [threshold, setThreshold] = useState('80');
+  // 'salary' = full income + expense view (default).
+  // 'expense_only' = simplified mode for users who just want to track
+  // monthly spending without ever logging income.
+  const [mode, setMode] = useState('salary');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -41,6 +45,7 @@ const ProfileEditor = ({ visible, onClose, initial, onSave, onDelete }) => {
       setColor(initial?.color || '#7F5AF0');
       setBudget(initial?.monthly_budget ? String(initial.monthly_budget) : '');
       setThreshold(initial?.alert_threshold ? String(initial.alert_threshold) : '80');
+      setMode(initial?.mode || 'salary');
     }
   }, [visible, initial]);
 
@@ -60,6 +65,7 @@ const ProfileEditor = ({ visible, onClose, initial, onSave, onDelete }) => {
         color,
         monthly_budget: Number(budget) || 0,
         alert_threshold: Math.min(100, Math.max(50, Number(threshold) || 80)),
+        mode,
       });
       hSuccess();
       onClose?.();
@@ -145,6 +151,26 @@ const ProfileEditor = ({ visible, onClose, initial, onSave, onDelete }) => {
           ))}
         </View>
 
+        <Text style={[TEXT_STYLES.label, { marginTop: SPACING.xl, marginBottom: SPACING.md }]}>Mode</Text>
+        <View style={{ gap: SPACING.sm }}>
+          <ModeOption
+            active={mode === 'salary'}
+            color={color}
+            icon="wallet-outline"
+            title="Salary mode"
+            subtitle="Track income + expenses, see net balance and budget."
+            onPress={() => { hSelection(); setMode('salary'); }}
+          />
+          <ModeOption
+            active={mode === 'expense_only'}
+            color={color}
+            icon="trending-down-outline"
+            title="Expense tracking"
+            subtitle="Just log what you spend. No income, no net balance."
+            onPress={() => { hSelection(); setMode('expense_only'); }}
+          />
+        </View>
+
         <View style={{ marginTop: SPACING.xl }}>
           <Input
             label="Monthly budget (optional)"
@@ -176,6 +202,41 @@ const ProfileEditor = ({ visible, onClose, initial, onSave, onDelete }) => {
   );
 };
 
+// Two-card mode selector. Active card uses the profile colour as accent so
+// the selection feels visually consistent with the rest of the editor.
+const ModeOption = ({ active, color, icon, title, subtitle, onPress }) => (
+  <Pressable
+    onPress={onPress}
+    style={[
+      styles.modeCard,
+      active && {
+        borderColor: color,
+        backgroundColor: `${color}18`,
+      },
+    ]}
+  >
+    <View
+      style={[
+        styles.modeIcon,
+        { backgroundColor: active ? `${color}33` : COLORS.surface, borderColor: active ? `${color}55` : COLORS.border },
+      ]}
+    >
+      <Ionicons name={icon} size={20} color={active ? color : COLORS.textSecondary} />
+    </View>
+    <View style={{ flex: 1, marginLeft: SPACING.md }}>
+      <Text style={{ color: COLORS.textPrimary, fontFamily: FONT.semibold, fontSize: 14 }}>{title}</Text>
+      <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 12, marginTop: 2, lineHeight: 16 }}>
+        {subtitle}
+      </Text>
+    </View>
+    <Ionicons
+      name={active ? 'checkmark-circle' : 'ellipse-outline'}
+      size={20}
+      color={active ? color : COLORS.textMuted}
+    />
+  </Pressable>
+);
+
 const styles = StyleSheet.create({
   iconGrid: {
     flexDirection: 'row',
@@ -193,6 +254,20 @@ const styles = StyleSheet.create({
   },
   colorDot: {
     width: 36, height: 36, borderRadius: 18,
+  },
+  modeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.md,
+  },
+  modeIcon: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1,
   },
 });
 

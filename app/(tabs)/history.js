@@ -25,10 +25,20 @@ const FILTERS = [
 
 export default function History() {
   const router = useRouter();
-  const { transactions, categories, settings, deleteTransaction, refresh } = useData();
+  const { transactions, categories, settings, deleteTransaction, refresh, activeProfile } = useData();
   const { show } = useToast();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
+
+  // Hide the Income / Expense type chips entirely in expense-only mode —
+  // they'd just be confusing (income chip would always be empty, expense
+  // chip is the same as "all").
+  const visibleFilters = useMemo(
+    () => (activeProfile?.mode === 'expense_only'
+      ? FILTERS.filter((f) => f.value !== 'income' && f.value !== 'expense')
+      : FILTERS),
+    [activeProfile?.mode]
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   const filtered = useMemo(() => {
@@ -159,7 +169,7 @@ export default function History() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: SPACING.xl, gap: SPACING.sm }}
           >
-            {FILTERS.map((f) => (
+            {visibleFilters.map((f) => (
               <Chip
                 key={f.value}
                 label={f.label}

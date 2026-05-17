@@ -2,7 +2,7 @@
   "expo": {
     "name": "MoneyMate",
     "slug": "moneymate",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "moneymate",
@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.akash.moneymate",
-      "buildNumber": "1.4.0"
+      "buildNumber": "1.4.1"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +19,7 @@
         "backgroundColor": "#0A0A0F"
       },
       "package": "com.akash.moneymate",
-      "versionCode": 6,
+      "versionCode": 7,
       "navigationBar": {
         "backgroundColor": "#0A0A0F",
         "barStyle": "light-content"

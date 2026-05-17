@@ -24,10 +24,10 @@ create policy "anyone reads app_versions"
 insert into public.app_versions (platform, version_name, version_code, apk_url, release_notes, mandatory)
 values (
   'android',
-  '1.4.0',
-  6,
-  'https://github.com/kamruj-akash/moneyMate-Cross-platform-app/releases/download/v1.4.0/app-release.apk',
-  E'• New "Expense Tracking" profile mode — track only what you spend, no income\n• Unified profile switcher on Home + Settings (switch, edit, create — all in one place)\n• 60% smaller download (~95MB → ~35MB) with per-architecture APK splits\n• Dropped unused libraries to slim the bundle further',
+  '1.4.1',
+  7,
+  'https://github.com/kamruj-akash/moneyMate-Cross-platform-app/releases/download/v1.4.1/app-release.apk',
+  E'• Stay logged in across long offline gaps — no more "Open after 2 days, get bounced to Login screen"\n• Instant launch (no network call at app-open). Account info comes straight from local cache.\n• Explicit refresh-then-sync flow when network comes back\n• Fixed APK / AAB build conflict caused by ABI splits + bundleRelease',
   false
 )
 on conflict (platform) do update

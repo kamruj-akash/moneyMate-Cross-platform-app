@@ -14,62 +14,37 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     let mounted = true;
-    // Hard ceiling on the bootstrap wait. If AsyncStorage or the Supabase
-    // session lock hangs after the user clears app data, the spinner would
-    // otherwise stick forever and the user would never reach the welcome
-    // screen. Better to fall through with no session and let the gate route
-    // them to welcome.
-    const BOOT_TIMEOUT_MS = 4000;
 
-    const withTimeout = (promise, fallback) =>
-      Promise.race([
-        promise.catch(() => fallback),
-        new Promise((resolve) => setTimeout(() => resolve(fallback), BOOT_TIMEOUT_MS)),
-      ]);
-
+    // Bootstrap is LOCAL-ONLY by design. No supabase calls, no network.
+    //
+    // Architecture rule: token refresh + cloud sync only happen AFTER the
+    // app is open and the network listener says we're online. App-open
+    // itself should never reach for the server — that was the root cause
+    // of the "open after 2 days offline → spinner → welcome screen" bug.
+    //
+    // The Supabase session is mirrored into our state by the
+    // onAuthStateChange listener below, which fires INITIAL_SESSION with
+    // whatever's already in supabase's storage. Our AUTH_USER cache is the
+    // durable identity that survives offline refresh failures.
     (async () => {
       try {
-        const offline = (await withTimeout(getJSON(KEYS.OFFLINE_MODE, false), false)) === true;
-        if (mounted) setIsOfflineMode(offline);
+        const offline = await getJSON(KEYS.OFFLINE_MODE, false);
+        const cachedUser = await getJSON(KEYS.AUTH_USER, null);
 
-        // Restore the cached auth user FIRST. Supabase will clear its own
-        // session when a refresh fails (e.g. user opens the app after weeks
-        // offline, refresh token still valid but no network), and we don't
-        // want that to look like a logout. AUTH_USER is our shadow identity
-        // — only an explicit signOut() call removes it.
-        const cachedUser = await withTimeout(getJSON(KEYS.AUTH_USER, null), null);
-        if (mounted && cachedUser) {
-          setUser(cachedUser);
-        }
-
-        const { data } = await withTimeout(
-          supabase.auth.getSession(),
-          { data: { session: null } }
-        );
-        if (mounted) {
-          setSession(data?.session || null);
-          if (data?.session?.user) {
-            // Real session — overlay the user info and refresh the cache so
-            // it stays in sync with the latest server-provided fields.
-            setUser(data.session.user);
-            setJSON(KEYS.AUTH_USER, {
-              id: data.session.user.id,
-              email: data.session.user.email,
-            }).catch(() => {});
-          }
-          // If getSession returned null but we already restored from cache
-          // above, leave `user` set. Sync stays paused (gated on `session`)
-          // until the network returns and supabase emits SIGNED_IN.
-        }
+        if (!mounted) return;
+        setIsOfflineMode(offline === true);
+        if (cachedUser) setUser(cachedUser);
       } catch {
-        // Fall through; bootstrapping ends in finally.
+        // Local read failed — fall through. Worst case the user lands on
+        // welcome; they can sign in again.
       } finally {
         if (mounted) setBootstrapping(false);
       }
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, sess) => {
-      // Real session present — adopt it, refresh cache.
+      // Real session present — adopt it, refresh the AUTH_USER cache so
+      // future cold starts have the latest email/id.
       if (sess) {
         setSession(sess);
         setUser(sess.user || null);
@@ -78,11 +53,9 @@ export const AuthProvider = ({ children }) => {
         }
         return;
       }
-      // No session. Drop session state but DO NOT clear `user` yet —
-      // supabase fires SIGNED_OUT both for explicit logouts and for
-      // automatic refresh failures (e.g. offline). Re-check the cache:
-      // if AUTH_USER was removed, the user explicitly signed out, so
-      // mirror that. Otherwise keep the shadow user.
+      // No session. Drop session state but DO NOT clear `user` — supabase
+      // fires SIGNED_OUT both for explicit logouts and for transient
+      // refresh failures. Only an explicit signOut() removes AUTH_USER.
       setSession(null);
       getJSON(KEYS.AUTH_USER, null).then((cached) => {
         if (!cached) setUser(null);
@@ -236,7 +209,17 @@ export const AuthProvider = ({ children }) => {
     isOfflineMode,
     bootstrapping,
     restoring,
-    isAuthenticated: !!session,
+    // "Logged in" from the user's perspective is governed by the cached
+    // user identity, not the (volatile) Supabase session — sessions are
+    // wiped by the supabase SDK on any refresh failure, including transient
+    // ones like "offline for 2 days". The cached user only goes away when
+    // signOut() is explicitly called. Cloud writes are still gated on a
+    // real session via syncManager, so this stays safe.
+    isAuthenticated: !!user,
+    // Surfaces whether we have a real, server-validated session right now.
+    // Use this when you specifically need to know if cloud calls are
+    // possible (sync UI hints, for example).
+    hasActiveSession: !!session,
     signUp,
     signIn,
     signOut,

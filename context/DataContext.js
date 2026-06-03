@@ -144,12 +144,17 @@ export const DataProvider = ({ children }) => {
       setSyncStatus((s) => ({ ...s, queue: qs, lastSync: ls, online }));
       setHydrated(true);
 
-      // Push to cloud after local data is consistent. Categories + recurring +
-      // settings are small — push every authed boot so missed writes recover.
-      // Transactions can be large — push only once per user (gated by flag).
-      // Use queueActions so all entries are appended in a single atomic write
-      // (parallel queueAction calls would race and lose writes).
-      if (user?.id && !isOfflineMode) {
+      // Push everything to cloud ONCE per user, on the first authed boot.
+      //
+      // Previously this block ran on every boot and re-upserted every
+      // profile / category / recurring / settings row, even when nothing
+      // had changed. Each boot added ~20-30 items to the sync queue and
+      // the UI flashed "pending" for a few seconds while processSyncQueue
+      // re-pushed them as no-ops. The CLOUD_PUSHED[user.id] flag now
+      // gates the whole block — subsequent changes ride out through
+      // individual queueAction calls in addTransaction/updateCategory/etc.
+      // which is the correct dirty-tracking model.
+      if (user?.id && !isOfflineMode && !pushedMap[user.id]) {
         const actions = [];
         // Profiles must sync first (FK dependency).
         for (const p of profs) actions.push({ type: 'upsert', table: 'profiles', data: p });
@@ -160,15 +165,10 @@ export const DataProvider = ({ children }) => {
         }
         for (const r of rec || []) actions.push({ type: 'upsert', table: 'recurring_transactions', data: r });
         if (set) actions.push({ type: 'upsert', table: 'user_settings', data: set });
-        const pushTx = !pushedMap[user.id];
-        if (pushTx) {
-          for (const t of tx || []) actions.push({ type: 'upsert', table: 'transactions', data: t });
-        }
+        for (const t of tx || []) actions.push({ type: 'upsert', table: 'transactions', data: t });
         await queueActions(actions);
-        if (pushTx) {
-          pushedMap[user.id] = true;
-          await setJSON(KEYS.CLOUD_PUSHED, pushedMap || {});
-        }
+        pushedMap[user.id] = true;
+        await setJSON(KEYS.CLOUD_PUSHED, pushedMap || {});
       }
     })();
     return () => { mounted = false; };

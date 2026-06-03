@@ -9,18 +9,21 @@ import Input from '../../components/ui/Input';
 import Chip from '../../components/ui/Chip';
 import EmptyState from '../../components/ui/EmptyState';
 import TransactionRow from '../../components/transactions/TransactionRow';
+import DownloadPdfSheet from '../../components/DownloadPdfSheet';
+import DateRangeSheet from '../../components/DateRangeSheet';
 import { useData } from '../../context/DataContext';
-import { fmtRelative, monthRange, subMonths, safeParse } from '../../utils/date';
+import { fmtRelative, monthRange, subMonths, safeParse, fmt, startOfDay, endOfDay } from '../../utils/date';
 import { formatAmount } from '../../utils/currency';
 import { useToast } from '../../components/ui/Toast';
 import { hError, hSuccess } from '../../utils/haptics';
 
 const FILTERS = [
+  { value: 'this_month', label: 'This month' },
+  { value: 'last_month', label: 'Last month' },
   { value: 'all', label: 'All' },
   { value: 'income', label: 'Income' },
   { value: 'expense', label: 'Expense' },
-  { value: 'this_month', label: 'This month' },
-  { value: 'last_month', label: 'Last month' },
+  { value: 'custom', label: 'Custom range' },
 ];
 
 export default function History() {
@@ -28,7 +31,12 @@ export default function History() {
   const { transactions, categories, settings, deleteTransaction, refresh, activeProfile } = useData();
   const { show } = useToast();
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState('all');
+  // Default to "This month" — opening History now lands on the current
+  // month's spending, which is what most users want to see first.
+  const [filter, setFilter] = useState('this_month');
+  const [customRange, setCustomRange] = useState({ from: null, to: null });
+  const [rangeSheetOpen, setRangeSheetOpen] = useState(false);
+  const [downloadOpen, setDownloadOpen] = useState(false);
 
   // Hide the Income / Expense type chips entirely in expense-only mode —
   // they'd just be confusing (income chip would always be empty, expense
@@ -57,6 +65,13 @@ export default function History() {
         const d = safeParse(t.created_at || t.date);
         return d >= start && d <= end;
       });
+    } else if (filter === 'custom' && customRange.from && customRange.to) {
+      const start = startOfDay(customRange.from);
+      const end = endOfDay(customRange.to);
+      list = list.filter((t) => {
+        const d = safeParse(t.created_at || t.date);
+        return d >= start && d <= end;
+      });
     }
     if (query.trim()) {
       const q = query.toLowerCase();
@@ -71,7 +86,7 @@ export default function History() {
     }
     list.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date));
     return list;
-  }, [transactions, categories, filter, query]);
+  }, [transactions, categories, filter, query, customRange.from, customRange.to]);
 
   // Group by date
   const sections = useMemo(() => {
@@ -144,11 +159,24 @@ export default function History() {
   return (
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <View style={{ paddingHorizontal: SPACING.xl, paddingTop: SPACING.md, paddingBottom: SPACING.sm }}>
-          <Text style={[TEXT_STYLES.h1]}>History</Text>
-          <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 14, marginTop: 4 }}>
-            {filtered.length} {filtered.length === 1 ? 'transaction' : 'transactions'} · {formatAmount(totalIncome - totalExpense, settings.currency)}
-          </Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[TEXT_STYLES.h1]}>History</Text>
+            <Text style={{ color: COLORS.textSecondary, fontFamily: FONT.regular, fontSize: 14, marginTop: 4 }}>
+              {filtered.length} {filtered.length === 1 ? 'transaction' : 'transactions'} · {formatAmount(totalIncome - totalExpense, settings.currency)}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => setDownloadOpen(true)}
+            hitSlop={8}
+            style={({ pressed }) => [
+              styles.downloadBtn,
+              pressed && { backgroundColor: COLORS.surfacePressed },
+            ]}
+          >
+            <Ionicons name="download-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.downloadBtnText}>Download</Text>
+          </Pressable>
         </View>
 
         <View style={{ paddingHorizontal: SPACING.xl }}>
@@ -169,14 +197,30 @@ export default function History() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: SPACING.xl, gap: SPACING.sm }}
           >
-            {visibleFilters.map((f) => (
-              <Chip
-                key={f.value}
-                label={f.label}
-                selected={filter === f.value}
-                onPress={() => setFilter(f.value)}
-              />
-            ))}
+            {visibleFilters.map((f) => {
+              // Custom-range chip behaves a bit differently: tapping it
+              // opens the date picker. When a range is set, its label
+              // shows the actual span (e.g. "May 1 – May 12").
+              const isCustom = f.value === 'custom';
+              const customLabel =
+                isCustom && customRange.from && customRange.to
+                  ? `${fmt(customRange.from, 'MMM d')} – ${fmt(customRange.to, 'MMM d')}`
+                  : f.label;
+              return (
+                <Chip
+                  key={f.value}
+                  label={customLabel}
+                  selected={filter === f.value}
+                  onPress={() => {
+                    if (isCustom) {
+                      setRangeSheetOpen(true);
+                    } else {
+                      setFilter(f.value);
+                    }
+                  }}
+                />
+              );
+            })}
           </ScrollView>
         </View>
 
@@ -200,12 +244,52 @@ export default function History() {
             }
           />
         )}
+
+        <DownloadPdfSheet
+          visible={downloadOpen}
+          onClose={() => setDownloadOpen(false)}
+        />
+        <DateRangeSheet
+          visible={rangeSheetOpen}
+          initialFrom={customRange.from}
+          initialTo={customRange.to}
+          onClose={() => setRangeSheetOpen(false)}
+          onApply={(from, to) => {
+            setCustomRange({ from, to });
+            setFilter('custom');
+            setRangeSheetOpen(false);
+          }}
+        />
       </SafeAreaView>
     </GradientBackground>
   );
 }
 
 const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  downloadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: 8,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}55`,
+    backgroundColor: `${COLORS.primary}18`,
+    marginTop: 6,
+  },
+  downloadBtnText: {
+    color: COLORS.primary,
+    fontFamily: FONT.semibold,
+    fontSize: 13,
+    marginLeft: 6,
+  },
   filterBar: {
     paddingBottom: SPACING.md,
   },

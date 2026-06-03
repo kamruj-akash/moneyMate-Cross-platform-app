@@ -4,8 +4,6 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import { COLORS, FONT, RADIUS, SHADOWS, SPACING, TEXT_STYLES } from '../../constants/theme';
 import GradientBackground from '../../components/GradientBackground';
 import SyncIndicator from '../../components/SyncIndicator';
@@ -23,7 +21,6 @@ import { fullSync } from '../../lib/syncManager';
 import { supabase } from '../../lib/supabase';
 import { clearLocalDataTables, KEYS, remove } from '../../lib/storage';
 import { CURRENCY_OPTIONS, formatAmount } from '../../utils/currency';
-import { exportBackupJSON, exportTransactionsPDF, saveBackupToDevice } from '../../lib/export';
 import { fmt } from '../../utils/date';
 import { hSuccess, hError } from '../../utils/haptics';
 import { checkForUpdate, startUpdateDownload, getCurrentVersion } from '../../lib/updates';
@@ -34,7 +31,7 @@ export default function Settings() {
   const { user, isOfflineMode, signOut, exitOfflineMode } = useAuth();
   const {
     transactions, categories, recurring, settings, syncStatus,
-    updateBudget, updateSettings, deleteRecurring, updateRecurring, replaceAllData,
+    updateBudget, updateSettings, deleteRecurring, updateRecurring,
     profiles, activeProfile,
   } = useData();
   const { show } = useToast();
@@ -289,96 +286,6 @@ export default function Settings() {
     setBudgetSheet(false);
   };
 
-  const exportPDF = async () => {
-    try {
-      const r = await exportTransactionsPDF({
-        transactions, categories, currency: settings.currency,
-        monthLabel: fmt(new Date(), 'MMMM yyyy'),
-      });
-      if (!r) show('PDF export not available', { variant: 'warning' });
-      else {
-        hSuccess();
-        show('PDF exported', { variant: 'success', description: 'Choose where to save it.' });
-      }
-    } catch (e) {
-      hError();
-      show('Could not export PDF', { variant: 'error', description: e?.message });
-    }
-  };
-  const backupJSON = async () => {
-    try {
-      await exportBackupJSON({ transactions, categories, recurring, settings });
-      hSuccess();
-      show('Backup ready', {
-        variant: 'success',
-        description: 'Pick a location to save the file.',
-      });
-    } catch (e) {
-      hError();
-      show('Could not back up', { variant: 'error', description: e?.message });
-    }
-  };
-
-  const saveBackupLocally = async () => {
-    try {
-      const r = await saveBackupToDevice({ transactions, categories, recurring, settings });
-      if (r.ok) {
-        hSuccess();
-        show('Backup saved to device', {
-          variant: 'success',
-          description: r.fileName,
-        });
-        return;
-      }
-      // Cancelled = user dismissed the directory picker. Don't yell.
-      if (r.reason === 'cancelled') return;
-      hError();
-      show('Could not save backup', {
-        variant: 'error',
-        description: r.error || 'Try sharing instead.',
-      });
-    } catch (e) {
-      hError();
-      show('Could not save backup', { variant: 'error', description: e?.message });
-    }
-  };
-
-  const restoreJSON = async () => {
-    try {
-      const res = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
-      if (res.canceled) return;
-      const file = res.assets[0];
-      const content = await FileSystem.readAsStringAsync(file.uri);
-      const data = JSON.parse(content);
-      Alert.alert(
-        'Restore from backup?',
-        `Found ${data?.transactions?.length || 0} transactions, ${data?.categories?.length || 0} categories. This will replace your current local data.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Restore',
-            onPress: async () => {
-              await replaceAllData({
-                transactions: data.transactions || [],
-                categories: data.categories || [],
-                recurring: data.recurring || [],
-                settings: data.settings || settings,
-              });
-              hSuccess();
-              show('Backup restored', {
-                variant: 'success',
-                description: `${data.transactions?.length || 0} transactions, ${data.categories?.length || 0} categories.`,
-              });
-            },
-          },
-        ]
-      );
-    } catch (e) {
-      hError();
-      show('Invalid backup file', { variant: 'error', description: e?.message });
-    }
-  };
-
   return (
     <GradientBackground>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -501,10 +408,6 @@ export default function Settings() {
 
           {/* Data */}
           <Section title="Data">
-            <Row icon="document-outline" label="Export to PDF" onPress={exportPDF} />
-            <Row icon="save-outline" label="Save backup to device" onPress={saveBackupLocally} />
-            <Row icon="share-outline" label="Share backup" onPress={backupJSON} />
-            <Row icon="cloud-upload-outline" label="Restore" onPress={restoreJSON} />
             <Row icon="grid-outline" label="Manage categories" onPress={() => router.push('/(tabs)/categories')} />
           </Section>
 

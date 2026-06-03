@@ -24,10 +24,10 @@ create policy "anyone reads app_versions"
 insert into public.app_versions (platform, version_name, version_code, apk_url, release_notes, mandatory)
 values (
   'android',
-  '1.4.1',
-  7,
-  'https://github.com/kamruj-akash/moneyMate-Cross-platform-app/releases/download/v1.4.1/app-release.apk',
-  E'• Stay logged in across long offline gaps — no more "Open after 2 days, get bounced to Login screen"\n• Instant launch (no network call at app-open). Account info comes straight from local cache.\n• Explicit refresh-then-sync flow when network comes back\n• Fixed APK / AAB build conflict caused by ABI splits + bundleRelease',
+  '1.5.0',
+  8,
+  'https://github.com/kamruj-akash/moneyMate-Cross-platform-app/releases/download/v1.5.0/app-release.apk',
+  E'• History tab now opens to This Month by default\n• New "Custom range" filter — pick any from–to date span\n• Download monthly PDF directly from History — only months with transactions are shown\n• PDF now saves straight to device (Android folder picker / iOS Files) — no more share-only\n• Better PDF rendering — proper Bengali ৳ symbol, clean print layout\n• Sync efficiency fix — no more spurious "N pending" on every cold start\n• Removed redundant Export/Backup/Restore rows from Settings',
   false
 )
 on conflict (platform) do update
